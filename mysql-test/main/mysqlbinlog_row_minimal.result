@@ -28,8 +28,8 @@ ROLLBACK/*!*/;
 /*!100001 SET @@session.gtid_seq_no=1*//*!*/;
 # at 371
 #<date> server id 1  end_log_pos 564 CRC32 XXX 	Query	thread_id=5	exec_time=x	error_code=0	xid=<xid>
-use `test`/*!*/;
 /*!110600 USE CATALOG `def` *//*!*/;
+use `test`/*!*/;
 SET TIMESTAMP=X/*!*/;
 SET @@session.pseudo_thread_id=5/*!*/;
 SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1, @@session.check_constraint_checks=1, @@session.sql_if_exists=0, @@session.explicit_defaults_for_timestamp=1, @@session.system_versioning_insert_history=0/*!*/;

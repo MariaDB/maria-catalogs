@@ -1833,31 +1833,35 @@ bool Query_log_event::print_query_header(IO_CACHE* file,
       goto err;
   }
 
+  if (print_event_info->catalog != catalog)
+  {
+    print_event_info->catalog= catalog;
+    if (my_b_printf(file, "/*!110600 USE CATALOG `%.*s` */%s\n",
+                    catalog_name.length, catalog_name.str,
+                    print_event_info->delimiter))
+      goto err;
+  }
+
   if ((flags & LOG_EVENT_SUPPRESS_USE_F))
   {
     if (!is_trans_keyword())
       print_event_info->db[0]= '\0';
   }
-  else if (db)
+  else
   {
-    bool different= memcmp(print_event_info->db, db, db_len + 1);
-    if (different)
+    if (db)
     {
-      memcpy(print_event_info->db, db, db_len + 1);
-      if (db[0])
-        if (my_b_printf(file, "use %`s%s\n", db, print_event_info->delimiter))
-          goto err;
+      bool different= memcmp(print_event_info->db, db, db_len + 1);
+      if (different)
+      {
+        memcpy(print_event_info->db, db, db_len + 1);
+        if (db[0])
+          if (my_b_printf(file, "use %`s%s\n", db,
+                          print_event_info->delimiter))
+            goto err;
+      }
     }
   }
-  if (!catalog_len)
-    catalog= (char*) "def";
-  if (strcmp(print_event_info->catalog, catalog))
-  {
-    strmov(print_event_info->catalog, catalog);
-    if (my_b_printf(file, "/*!110600 USE CATALOG `%s` */%s\n", catalog, print_event_info->delimiter))
-      goto err;
-  }
-
   end=int10_to_str((long) when, strmov(buff,"SET TIMESTAMP="),10);
   if (when_sec_part && when_sec_part <= TIME_MAX_SECOND_PART)
   {
@@ -3636,7 +3640,8 @@ st_print_event_info::st_print_event_info()
   bzero(db, sizeof(db));
   bzero(charset, sizeof(charset));
   bzero(time_zone_str, sizeof(time_zone_str));
-  bzero(catalog,sizeof(catalog));
+  // Set catalog to impossible value to ensure that catalog is updated later!
+  catalog= (SQL_CATALOG *) 1;
   delimiter[0]= ';';
   delimiter[1]= 0;
   flags2_inited= 0;

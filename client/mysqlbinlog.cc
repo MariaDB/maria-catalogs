@@ -43,6 +43,7 @@
 #include "sql_priv.h"
 #include "sql_basic_types.h"
 #include <atomic>
+#include "catalog.h"
 #include "log_event.h"
 #include "compat56.h"
 #include "sql_common.h"
@@ -606,14 +607,28 @@ static bool shall_skip_database(const char *log_dbname)
 static void
 print_use_stmt(PRINT_EVENT_INFO* pinfo, const Query_log_event *ev)
 {
+  if (ev->flags & LOG_EVENT_SUPPRESS_USE_F)
+    return;
+
   const char* db= ev->db;
   const size_t db_len= ev->db_len;
+  const SQL_CATALOG *catalog= ev->catalog;
+  bool catalog_changed= (catalog && catalog != pinfo->catalog);
 
   // pinfo->db is the current db.
-  // If current db is the same as required db, do nothing.
-  if ((ev->flags & LOG_EVENT_SUPPRESS_USE_F) || !db ||
-      !memcmp(pinfo->db, db, db_len + 1))
+  // If current db and catalog are the same as required catalog,db, do nothing
+  if (!db || (!memcmp(pinfo->db, db, db_len + 1) && !catalog_changed))
     return;
+
+  if (catalog_changed)
+  {
+    my_fprintf(result_file, "USE CATALOG %`s%s\n", catalog->name.str,
+               pinfo->delimiter);
+    pinfo->catalog= catalog;
+    pinfo->db[0]= 0;                            // Reset db
+  }
+
+  // In case of rewrite rule print USE statement for db_to
 
   // Current db and required db are different.
   // Check for rewrite rule for required db. (Note that in a rewrite rule
