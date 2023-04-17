@@ -1005,6 +1005,7 @@ int bootstrap(MYSQL_FILE *file)
   thd->client_capabilities|= CLIENT_MULTI_RESULTS;
 
   thd->init_for_queries();
+  thd->catalog= default_catalog();
 
   for ( ; ; )
   {
