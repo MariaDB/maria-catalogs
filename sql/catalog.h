@@ -24,6 +24,7 @@ public:
   SQL_CATALOG(const LEX_CSTRING *name, const LEX_CSTRING *path);
   const LEX_CSTRING name;
   const LEX_CSTRING path;             // Directory path, including '/'
+  ulong event_scheduler;              // Default for event scheduler
 };
 
 extern SQL_CATALOG *get_catalog(LEX_CSTRING *name);

@@ -241,6 +241,11 @@ const uchar *sys_var::global_value_ptr(THD *thd, const LEX_CSTRING *base) const
   return global_var_ptr();
 }
 
+const uchar *sys_var::catalog_value_ptr(THD *thd, const LEX_CSTRING *base) const
+{
+  return catalog_var_ptr(thd);
+}
+
 bool sys_var::check(THD *thd, set_var *var)
 {
   if (unlikely((var->value && do_check(thd, var)) ||
@@ -273,19 +278,24 @@ const uchar *sys_var::value_ptr(THD *thd, enum_var_type type,
                                 const LEX_CSTRING *base) const
 {
   DBUG_ASSERT(base);
+  if (scope() == CATALOG)
+  {
+    mysql_mutex_assert_owner(&LOCK_global_system_variables);
+    AutoRLock lock(guard);
+    return catalog_value_ptr(thd, base);
+  }
   if (type == OPT_GLOBAL || scope() == GLOBAL)
   {
     mysql_mutex_assert_owner(&LOCK_global_system_variables);
     AutoRLock lock(guard);
     return global_value_ptr(thd, base);
   }
-  else
-    return session_value_ptr(thd, base);
+  return session_value_ptr(thd, base);
 }
 
 bool sys_var::set_default(THD *thd, set_var* var)
 {
-  if (var->type == OPT_GLOBAL || scope() == GLOBAL)
+  if (var->type == OPT_GLOBAL || scope() == GLOBAL || scope() == CATALOG)
     global_save_default(thd, var);
   else
     session_save_default(thd, var);
