@@ -44,6 +44,7 @@
 #define COST_ADJUST(X) X
 #define GLOBAL_VAR(X) sys_var::GLOBAL, (((char*)&(X))-(char*)&global_system_variables), sizeof(X)
 #define SESSION_VAR(X) sys_var::SESSION, offsetof(SV, X), sizeof(((SV *)0)->X)
+#define CATALOG_VAR(X) sys_var::GLOBAL, (((char*)&(internal_default_catalog.X))-(char*)&global_system_variables), sizeof(internal_default_catalog.X)
 #define SESSION_ONLY(X) sys_var::ONLY_SESSION, offsetof(SV, X), sizeof(((SV *)0)->X)
 #define NO_CMD_LINE CMD_LINE(NO_ARG, sys_var::NO_GETOPT)
 #define CMD_LINE_HELP_ONLY CMD_LINE(NO_ARG, sys_var::GETOPT_ONLY_HELP)
@@ -73,6 +74,8 @@
 
 #define session_var(THD, TYPE) (*(TYPE*)session_var_ptr(THD))
 #define global_var(TYPE) (*(TYPE*)global_var_ptr())
+#define catalog_var(THD,TYPE) (*(TYPE*)catalog_var_ptr(THD))
+#define global_or_catalog_var(THD,TYPE) (*(TYPE*)global_or_catalog_ptr(THD))
 
 #if SIZEOF_OFF_T > 4 && defined(BIG_TABLES)
 #define GET_HA_ROWS GET_ULL
@@ -415,7 +418,8 @@ public:
   }
   bool global_update(THD *thd, set_var *var)
   {
-    global_var(ulong)= static_cast<ulong>(var->save_result.ulonglong_value);
+    global_or_catalog_var(thd, ulong)=
+      static_cast<ulong>(var->save_result.ulonglong_value);
     return false;
   }
   void session_save_default(THD *thd, set_var *var)
@@ -428,6 +432,8 @@ public:
   { return valptr(thd, session_var(thd, ulong)); }
   const uchar *global_value_ptr(THD *thd, const LEX_CSTRING *base) const
   { return valptr(thd, global_var(ulong)); }
+  const uchar *catalog_value_ptr(THD *thd, const LEX_CSTRING *base) const
+  { return valptr(thd, catalog_var(thd, ulong)); }
   const uchar *default_value_ptr(THD *thd) const
   { return valptr(thd, (ulong)option.def_value); }
 
