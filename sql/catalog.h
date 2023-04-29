@@ -34,6 +34,6 @@ inline SQL_CATALOG *default_catalog()
 {
   return &internal_default_catalog;
 }
-
+extern my_bool using_catalogs;
 
 #endif /* CATALOG_INCLUDED */
