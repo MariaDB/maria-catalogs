@@ -166,8 +166,9 @@ static my_bool close_cached_connection_tables_callback(
   }
 
   tmp->next_global= tmp->next_local= arg->tables;
-  MDL_REQUEST_INIT(&tmp->mdl_request, MDL_key::TABLE, tmp->db.str,
-                   tmp->table_name.str, MDL_EXCLUSIVE, MDL_TRANSACTION);
+  MDL_REQUEST_INIT(&tmp->mdl_request, MDL_key::TABLE, arg->thd->catalog,
+                   tmp->db.str, tmp->table_name.str,
+                   MDL_EXCLUSIVE, MDL_TRANSACTION);
   arg->tables= tmp;
 
 end:
@@ -345,7 +346,7 @@ bool servers_reload(THD *thd)
   mysql_rwlock_wrlock(&THR_LOCK_servers);
 
   thd->catalog= default_catalog();
-  tables[0].init_one_table(&MYSQL_SCHEMA_NAME, &MYSQL_SERVERS_NAME, 0, TL_READ);
+  tables[0].init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_READ);
 
   if (unlikely(open_and_lock_tables(thd, tables, FALSE,
                                     MYSQL_LOCK_IGNORE_TIMEOUT)))
@@ -483,7 +484,7 @@ insert_server(THD *thd, FOREIGN_SERVER *server)
   DBUG_ENTER("insert_server");
 
   thd->catalog= default_catalog();
-  tables.init_one_table(&MYSQL_SCHEMA_NAME, &MYSQL_SERVERS_NAME, 0, TL_WRITE);
+  tables.init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_WRITE);
 
   /* need to open before acquiring THR_LOCK_plugin or it will deadlock */
   if (! (table= open_ltable(thd, &tables, TL_WRITE, MYSQL_LOCK_IGNORE_TIMEOUT)))
@@ -699,7 +700,7 @@ static int drop_server_internal(THD *thd, LEX_SERVER_OPTIONS *server_options)
                       server_options->server_name.str));
 
   thd->catalog= default_catalog();
-  tables.init_one_table(&MYSQL_SCHEMA_NAME, &MYSQL_SERVERS_NAME, 0, TL_WRITE);
+  tables.init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_WRITE);
 
   /* hit the memory hit first */
   if (unlikely((error= delete_server_record_in_cache(server_options))))
@@ -834,7 +835,7 @@ int update_server(THD *thd, FOREIGN_SERVER *existing, FOREIGN_SERVER *altered)
   DBUG_ENTER("update_server");
 
   thd->catalog= org_catalog;
-  tables.init_one_table(&MYSQL_SCHEMA_NAME, &MYSQL_SERVERS_NAME, 0, TL_WRITE);
+  tables.init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_WRITE);
 
   if (!(table= open_ltable(thd, &tables, TL_WRITE, MYSQL_LOCK_IGNORE_TIMEOUT)))
   {
