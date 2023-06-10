@@ -43,10 +43,6 @@ SQL_CATALOG internal_default_catalog{&default_catalog_name, &empty_clex_str};
 Hash_set <SQL_CATALOG> catalog_hash;
 my_bool using_catalogs;
 
-static bool late_init_done= 0;
-
-static SQL_I_List<SQL_CATALOG> deleted_catalogs;
-
 /* This is only used for the default catalog */
 SQL_CATALOG::SQL_CATALOG(const LEX_CSTRING *name_arg,
                          const LEX_CSTRING *path_arg)
@@ -64,7 +60,8 @@ SQL_CATALOG::SQL_CATALOG(const LEX_CSTRING *name_arg,
 }
 
 
-#ifdef NO_EMBEDDED_ACCESS_CHECKS
+#ifdef EMBEDDED_LIBRARY
+
 bool check_if_using_catalogs()
 {
   my_error(ER_NO_CATALOGS, MYF(0));
@@ -83,9 +80,18 @@ bool check_catalog_access(THD *thd, const LEX_CSTRING *name)
 {
   return 1;
 }
+bool init_catalogs(const char *datadir)
+{
+  return 0;
+}
 void free_catalogs()
 {}
 #else
+
+static bool late_init_done= 0;
+
+static SQL_I_List<SQL_CATALOG> deleted_catalogs;
+
 
 /* Check if the server is configured with catalog support */
 
@@ -163,7 +169,6 @@ bool check_catalog_access(THD *thd, const LEX_CSTRING *name)
   }
   return false;
 }
-#endif /* NO_EMBEDDED_ACCESS_CHECKS */
 
 
 /*
@@ -900,3 +905,5 @@ bool maria_alter_catalog(THD *thd, SQL_CATALOG *catalog,
   Schema_specification_st tmp(*create_info);
   return maria_alter_catalog_internal(thd, catalog, &tmp);
 }
+
+#endif /* EMBEDDED_LIBRARY */

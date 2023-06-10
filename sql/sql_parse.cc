@@ -3228,6 +3228,7 @@ static bool prepare_db_action(THD *thd, privilege_t want_access,
   return check_access(thd, want_access, dbname->str, NULL, NULL, 1, 0);
 }
 
+#ifndef EMBEDDED_LIBRARY
 static bool prepare_catalog_action(THD *thd, LEX_CSTRING *name)
 {
   if (check_if_using_catalogs() || check_catalog_access(thd, name))
@@ -3240,6 +3241,7 @@ static bool prepare_catalog_action(THD *thd, LEX_CSTRING *name)
   }
   return false;
 }
+#endif /* EMBEDDED_LIBRARY */
 
 
 bool Sql_cmd_call::execute(THD *thd)
@@ -5038,12 +5040,6 @@ mysql_execute_command(THD *thd, bool is_called_from_prepared_stmt)
       break;
     }
 #endif
-  case SQLCOM_CHANGE_CATALOG:
-  {
-    if (!mariadb_change_catalog(thd, &select_lex->db))
-      my_ok(thd);
-    break;
-  }
   case SQLCOM_CHANGE_DB:
   {
     if (!mysql_change_db(thd, &select_lex->db, FALSE))
@@ -5206,6 +5202,13 @@ mysql_execute_command(THD *thd, bool is_called_from_prepared_stmt)
     if (!res)
       my_ok(thd);
     break;
+#ifndef EMBEDDED_LIBRARY
+  case SQLCOM_CHANGE_CATALOG:
+  {
+    if (!mariadb_change_catalog(thd, &select_lex->db))
+      my_ok(thd);
+    break;
+  }
   case SQLCOM_CREATE_CATALOG:
   {
     if (prepare_catalog_action(thd, &lex->name))
@@ -5258,6 +5261,7 @@ mysql_execute_command(THD *thd, bool is_called_from_prepared_stmt)
     res= maria_alter_catalog(thd, catalog, &lex->create_info);
     break;
   }
+#endif /* EMBEDDED_LIBRARY */
   case SQLCOM_CREATE_DB:
   {
     if (prepare_db_action(thd, lex->create_info.or_replace() ?
