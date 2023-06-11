@@ -26,6 +26,7 @@ langdir=""
 srcdir=""
 
 args=""
+client_args=""
 defaults=""
 defaults_group_suffix=""
 mysqld_opt=""
@@ -34,20 +35,23 @@ group=""
 silent_startup="--silent-startup"
 log_error=""
 catalog_names=""
-default_catalog=""
+default_catalog="def/"
 create_catalogs=""
 
 force=0
 in_rpm=0
 ip_only=0
 cross_bootstrap=0
+datadir_exists=0
 auth_root_authentication_method=socket
 auth_root_socket_user=""
 skip_test_db=0
 extra_file=""
+debug=""
 
 dirname0=`dirname $0 2>/dev/null`
 dirname0=`dirname $dirname0 2>/dev/null`
+debug_file=/tmp/mariadb_install_db.log
 
 case "$0" in
   *mysqld_install_db)
@@ -78,9 +82,15 @@ Usage: $0 [OPTIONS]
   --catalogs[=list]    Initialize MariaDB for catalogs. Argument is a list,
                        separated with space, of the catalogs to create.
                        The def catalog is created automatically.
+  --catalog-user=user  User when adding catalogs to running server.
+  --catalog-password=password
+                       Password for catalog-user.
+  --catalog-client-arg=arg
+                       Other arguments to 'mariadb' when adding new catalogs.
   --cross-bootstrap    For internal use.  Used when building the MariaDB system
                        tables on a different host than the target.
   --datadir=path       The path to the MariaDB data directory.
+  --debug=path         Write commands to-be executed in $debug_file.
   --defaults-extra-file=name
                        Read this file after the global files are read.
   --defaults-file=name Only read default options from the given file name.
@@ -178,17 +188,28 @@ parse_arguments()
       --help) usage ;;
       --no-defaults|--defaults-file=*|--defaults-extra-file=*)
         defaults="$arg" ;;
-      --catalogs)
+      --catalogs | --catalog)
           args="$args --catalogs"
           catalog_names="def"
-          default_catalog="def/"
           ;;
       --catalogs=*)
           args="$args --catalogs"
           catalog_names=`parse_arg "$arg"`;
           catalog_names="def $catalog_names";
-          default_catalog="def/"
           ;;
+      --catalog-user=*)
+          tmp=`parse_arg "$arg"`;
+          client_args="$client_args --user=$tmp";;
+      --catalog-password=*)
+          tmp=`parse_arg "$arg"`;
+          client_args="$client_args --password=$tmp";;
+      --catalog-password)
+          client_args="$client_args --password";;
+      --catalog-client-arg=*)
+          tmp=`parse_arg "$arg"`;
+          client_args="$client_args $tmp";;
+      --debug)
+          debug=1;;
       --defaults-group-suffix=*)
         defaults_group_suffix="$arg" ;;
       --cross-bootstrap|--windows)
@@ -422,7 +443,7 @@ create_system_tables="$srcpkgdatadir/mysql_system_tables.sql"
 create_def_system_tables="$srcpkgdatadir/maria_def_system_tables.sql"
 create_performance_tables="$srcpkgdatadir/mysql_performance_tables.sql"
 fill_system_tables="$srcpkgdatadir/mysql_system_tables_data.sql"
-maria_add_gis_sp="$buildpkgdatadir/maria_add_gis_sp_bootstrap.sql"
+maria_add_gis_sp="$buildpkgdatadir/maria_add_gis_sp.sql"
 mysql_test_db="$srcpkgdatadir/mysql_test_db.sql"
 mysql_sys_schema="$buildpkgdatadir/mysql_sys_schema.sql"
 
@@ -558,9 +579,21 @@ fi
 
 if test -f "$ldata/${default_catalog}mysql/user.frm"
 then
-    echo "mysql.user table already exists in $ldata/${default_catalog}mysql"
+    datadir_exists=1
+fi
+
+if test "$datadir_exists" -eq 1 && test -z "$catalog_names"
+then
+    echo "mysql.user table already exists in $ldata/${default_catalog}"
     echo "Run mariadb-upgrade, not mariadb-install-db"
-    exit 0
+    exit 1
+fi
+
+if test -f "$ldata/mysql/user.frm"
+then
+    echo "mysql.user table already exists in $ldata"
+    echo "Run mariadb-upgrade, not mariadb-install-db"
+    exit 1
 fi
 
 # When doing a "cross bootstrap" install, no reference to the current
@@ -602,6 +635,14 @@ mysqld_install_cmd_line()
   $args --max_allowed_packet=8M \
   --net_buffer_length=16K
 }
+
+mariadb_client_install_cmd_line()
+{
+    $bindir/mariadb $defaults --abort-source-on-error=1 \
+                    --max_allowed_packet=8M \
+                    --net_buffer_length=16K --batch $client_args --catalog=def
+}
+
 
 # Use $auth_root_socket_user if explicitly specified.
 # Otherwise use the owner of datadir - ${user:-$USER}
@@ -660,48 +701,73 @@ cat_sql()
   fi
 }
 
-# Create the system and help tables by passing them to "mariadbd --bootstrap"
-s_echo "Installing MariaDB system tables in '$ldata' ..."
-
-if cat_sql | eval "$filter_cmd_line" | mysqld_install_cmd_line > /dev/null
+if test "$datadir_exists" -eq 1
 then
-    printf "@VERSION@-MariaDB" > "$ldata/mariadb_upgrade_info"
-  s_echo "OK"
-else
-  log_file_place=$ldata
-  if test -n "$log_error"
+  s_echo "Adding new catalogs to running MariaDB server at $ldata"
+  if test -n $debug
   then
-    log_file_place="$log_error or $log_file_place"
+      cat_sql | eval "$filter_cmd_line" > $debug_file
   fi
-  echo
-  echo "Installation of system tables failed!  Examine the logs in"
-  echo "$log_file_place for more information."
-  echo
-  echo "The problem could be conflicting information in an external"
-  echo "my.cnf files. You can ignore these by doing:"
-  echo
-  echo "    shell> $0 --defaults-file=~/.my.cnf"
-  echo
-  echo "You can also try to start the mariadbd daemon with:"
-  echo
-  echo "    shell> $mysqld --skip-grant-tables --general-log &"
-  echo
-  echo "and use the command line tool $bindir/mariadb"
-  echo "to connect to the mysql database and look at the grant tables:"
-  echo
-  echo "    shell> $bindir/mariadb -u root mysql"
-  echo "    MariaDB> show tables;"
-  echo
-  echo "Try '$mysqld --help' if you have problems with paths.  Using"
-  echo "--general-log gives you a log in $ldata that may be helpful."
-  link_to_help
-  echo "You can find the latest source at https://downloads.mariadb.org and"
-  echo "the maria-discuss email list at https://launchpad.net/~maria-discuss"
-  echo
-  echo "Please check all of the above before submitting a bug report"
-  echo "at https://mariadb.org/jira"
-  echo
-  exit 1
+  if cat_sql | eval "$filter_cmd_line" | mariadb_client_install_cmd_line
+  then
+      s_echo "OK"
+  else
+      echo "Creating new catalogs failed. Please check that MariaDB server is running"
+      echo "and that the mariadb client can connect to it."
+      if test -z $debug
+      then
+          echo "You can try mariadb_install_db again with the --debug and then check in"
+          echo "$debug_file what when wrong."
+      fi
+  fi
+else
+  # Create the system and help tables by passing them to "mariadbd --bootstrap"
+  s_echo "Installing MariaDB system tables in '$ldata' ..."
+
+  if test -n $debug
+  then
+      cat_sql | eval "$filter_cmd_line" > $debug_file
+  fi
+  if cat_sql | eval "$filter_cmd_line" | mysqld_install_cmd_line > /dev/null
+  then
+      printf "@VERSION@-MariaDB" > "$ldata/mariadb_upgrade_info"
+      s_echo "OK"
+  else
+    log_file_place=$ldata
+    if test -n "$log_error"
+      then
+          log_file_place="$log_error or $log_file_place"
+    fi
+    echo
+    echo "Installation of system tables failed!  Examine the logs in"
+    echo "$log_file_place for more information."
+    echo
+    echo "The problem could be conflicting information in an external"
+    echo "my.cnf files. You can ignore these by doing:"
+    echo
+    echo "    shell> $0 --defaults-file=~/.my.cnf"
+    echo
+    echo "You can also try to start the mariadbd daemon with:"
+    echo
+    echo "    shell> $mysqld --skip-grant-tables --general-log &"
+    echo
+    echo "and use the command line tool $bindir/mariadb"
+    echo "to connect to the mysql database and look at the grant tables:"
+    echo
+    echo "    shell> $bindir/mariadb -u root mysql"
+    echo "    MariaDB> show tables;"
+    echo
+    echo "Try '$mysqld --help' if you have problems with paths.  Using"
+    echo "--general-log gives you a log in $ldata that may be helpful."
+    link_to_help
+    echo "You can find the latest source at https://downloads.mariadb.org and"
+    echo "the maria-discuss email list at https://launchpad.net/~maria-discuss"
+    echo
+    echo "Please check all of the above before submitting a bug report"
+    echo "at https://mariadb.org/jira"
+    echo
+    exit 1
+  fi
 fi
 
 # Don't output verbose information if running inside bootstrap or using
