@@ -270,6 +270,8 @@ our $opt_fast= 0;
 our $opt_force= 0;
 our $opt_mem= $ENV{'MTR_MEM'};
 our $opt_clean_vardir= $ENV{'MTR_CLEAN_VARDIR'};
+our $opt_catalogs= 0;
+our $opt_catalog_name="def";
 
 our $opt_gcov;
 our $opt_gprof;
@@ -1177,6 +1179,8 @@ sub command_line_setup {
              'client-libdir=s'          => \$path_client_libdir,
 
              # Misc
+             'catalogs'                 => \$opt_catalogs,
+             'use-catalog=s'            => \$opt_catalog_name,
              'comment=s'                => \$opt_comment,
              'fast'                     => \$opt_fast,
 	     'force-restart'            => \$opt_force_restart,
@@ -1798,7 +1802,7 @@ sub collect_mysqld_features {
 
 sub collect_mysqld_features_from_running_server ()
 {
-  my $mysql= mtr_exe_exists("$path_client_bindir/mysql");
+  my $mysql= mtr_exe_exists("$path_client_bindir/mariadb");
 
   my $args;
   mtr_init_args(\$args);
@@ -2119,7 +2123,8 @@ sub environment_setup {
   $ENV{'MYSQL_BINDIR'}=       $bindir;
   $ENV{'MYSQL_SHAREDIR'}=     $path_language;
   $ENV{'MYSQL_CHARSETSDIR'}=  $path_charsetsdir;
-  
+  $ENV{'MARIADB_CATALOG'}=    $opt_catalog_name;
+
   if (IS_WINDOWS)
   {
     $ENV{'SECURE_LOAD_PATH'}= $glob_mysql_test_dir."\\std_data";
@@ -2226,8 +2231,8 @@ sub environment_setup {
   # mysqlhotcopy
   # ----------------------------------------------------
   my $mysqlhotcopy=
-    mtr_pl_maybe_exists("$bindir/scripts/mysqlhotcopy") ||
-    mtr_pl_maybe_exists("$path_client_bindir/mysqlhotcopy");
+    mtr_pl_maybe_exists("$bindir/scripts/mariadb-hotcopy") ||
+    mtr_pl_maybe_exists("$path_client_bindir/mariadb-hotcopy");
   if ($mysqlhotcopy)
   {
     $ENV{'MYSQLHOTCOPY'}= $mysqlhotcopy;
@@ -2282,6 +2287,10 @@ sub environment_setup {
       "$path_client_bindir/mariabackup");
 
   $ENV{XTRABACKUP}= native_path($exe_mariabackup) if $exe_mariabackup;
+  if ($opt_catalogs)
+  {
+    $ENV{'USING_CATALOGS'}= 1;
+  }
 
   my $exe_xbstream= mtr_exe_maybe_exists(
         "$bindir/extra/mariabackup/$multiconfig/mbstream",
@@ -3057,6 +3066,7 @@ sub mysql_install_db {
   mtr_add_arg($args, "--core-file");
   mtr_add_arg($args, "--console");
   mtr_add_arg($args, "--character-set-server=latin1");
+  mtr_add_arg($args, "--catalogs") if ($opt_catalogs);
 
   if ( $opt_debug )
   {
@@ -3199,7 +3209,7 @@ sub mysql_install_db {
   mtr_tofile($path_bootstrap_log,
 	     "$exe_mysqld_bootstrap " . join(" ", @$args) . "\n");
 
-  if ('--catalogs' ~~ @$args)
+  if ($opt_catalogs)
   {
       # Create directories def mysql
       mkpath("$install_datadir/def/mysql");
@@ -3900,6 +3910,23 @@ sub run_testcase ($$) {
           $ENV{$name}= $val;
         }
       }
+    }
+
+    # Set up things for catalogs
+    # The values of MARIADB_TOPDIR and MARIAD_DATADIR should
+    # be taken from the values used by the default (first)
+    # connection that is used by mariadb-test.
+    my ($mysqld, @servers);
+    @servers= all_servers();
+    $mysqld= $servers[0];
+    $ENV{'MARIADB_TOPDIR'}= $mysqld->value('datadir');
+    if (!$opt_catalogs)
+    {
+      $ENV{'MARIADB_DATADIR'}= $mysqld->value('datadir');
+    }
+    else
+    {
+      $ENV{'MARIADB_DATADIR'}= $mysqld->value('datadir') . "/" . $opt_catalog_name;
     }
 
     # Write start of testcase to log
