@@ -3,9 +3,9 @@ catalog()
 def
 create catalog c1;
 show catalogs;
-Catalog
-c1
-def
+Catalog	Comment
+c1	
+def	default catalog
 show databases;
 Database
 information_schema
@@ -16,10 +16,10 @@ sys
 test
 create catalog c2;
 show catalogs;
-Catalog
-c1
-c2
-def
+Catalog	Comment
+c1	
+c2	
+def	default catalog
 show create catalog c2;
 Catalog	Create Catalog
 c2	CREATE CATALOG `c2` DEFAULT CHARACTER SET latin1 COLLATE latin1_swedish_ci
@@ -42,6 +42,7 @@ ERROR HY000: Catalog directory 'def' is not empty
 #
 # Test status vars
 #
+flush status;
 create catalog cat1;
 use catalog cat1;
 select catalog();
