@@ -538,7 +538,8 @@ Event_db_repository::fill_schema_events(THD *thd, TABLE_LIST *i_s_table,
 
   start_new_trans new_trans(thd);
 
-  event_table.init_one_mysql_table(&MYSQL_EVENT_NAME, TL_READ);
+  event_table.init_one_table(thd->catalog, &MYSQL_SCHEMA_NAME, &MYSQL_EVENT_NAME,
+                             0, TL_READ);
 
   if (open_system_tables_for_read(thd, &event_table))
   {
