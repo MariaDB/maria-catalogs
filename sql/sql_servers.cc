@@ -339,13 +339,11 @@ bool servers_reload(THD *thd)
 {
   TABLE_LIST tables[1];
   bool return_val= TRUE;
-  SQL_CATALOG *org_catalog= thd->catalog;
   DBUG_ENTER("servers_reload");
 
   DBUG_PRINT("info", ("locking servers_cache"));
   mysql_rwlock_wrlock(&THR_LOCK_servers);
 
-  thd->catalog= default_catalog();
   tables[0].init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_READ);
 
   if (unlikely(open_and_lock_tables(thd, tables, FALSE,
@@ -374,7 +372,6 @@ end:
   close_mysql_tables(thd);
   DBUG_PRINT("info", ("unlocking servers_cache"));
   mysql_rwlock_unlock(&THR_LOCK_servers);
-  thd->catalog= org_catalog;
   DBUG_RETURN(return_val);
 }
 
@@ -417,30 +414,33 @@ get_server_from_table_to_cache(TABLE *table)
   table->use_all_columns();
 
   /* get each field into the server struct ptr */
-  ptr= get_field(&mem, table->field[0]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_NAME]);
   server->server_name= ptr ? ptr : blank;
   server->server_name_length= (uint) strlen(server->server_name);
-  ptr= get_field(&mem, table->field[1]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_HOST]);
   server->host= ptr ? ptr : blank;
-  ptr= get_field(&mem, table->field[2]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_CATALOG]);
+  server->catalog= ptr ? ptr : blank;
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_DB]);
   server->db= ptr ? ptr : blank;
-  ptr= get_field(&mem, table->field[3]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_USER]);
   server->username= ptr ? ptr : blank;
-  ptr= get_field(&mem, table->field[4]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_PASS]);
   server->password= ptr ? ptr : blank;
-  ptr= get_field(&mem, table->field[5]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_PORT]);
   server->sport= ptr ? ptr : blank;
 
   server->port= server->sport ? atoi(server->sport) : 0;
 
-  ptr= get_field(&mem, table->field[6]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_SOCK]);
   server->socket= ptr && strlen(ptr) ? ptr : blank;
-  ptr= get_field(&mem, table->field[7]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_WRAPPER]);
   server->scheme= ptr ? ptr : blank;
-  ptr= get_field(&mem, table->field[8]);
+  ptr= get_field(&mem, table->field[FEDERATED_FIELD_OWNER]);
   server->owner= ptr ? ptr : blank;
   DBUG_PRINT("info", ("server->server_name %s", server->server_name));
   DBUG_PRINT("info", ("server->host %s", server->host));
+  DBUG_PRINT("info", ("server->catalog %s", server->catalog));
   DBUG_PRINT("info", ("server->db %s", server->db));
   DBUG_PRINT("info", ("server->username %s", server->username));
   DBUG_PRINT("info", ("server->password %s", server->password));
@@ -480,11 +480,9 @@ insert_server(THD *thd, FOREIGN_SERVER *server)
   int error= -1;
   TABLE_LIST tables;
   TABLE *table;
-  SQL_CATALOG *org_catalog= thd->catalog;
   DBUG_ENTER("insert_server");
 
-  thd->catalog= default_catalog();
-  tables.init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_WRITE);
+  tables.init_one_table(thd->catalog, &MYSQL_SCHEMA_NAME, &MYSQL_SERVERS_NAME, 0, TL_WRITE);
 
   /* need to open before acquiring THR_LOCK_plugin or it will deadlock */
   if (! (table= open_ltable(thd, &tables, TL_WRITE, MYSQL_LOCK_IGNORE_TIMEOUT)))
@@ -500,7 +498,6 @@ insert_server(THD *thd, FOREIGN_SERVER *server)
     goto end;
 
 end:
-  thd->catalog= org_catalog;
   DBUG_RETURN(error);
 }
 
@@ -576,28 +573,32 @@ store_server_fields(TABLE *table, FOREIGN_SERVER *server)
     even if with empty strings
   */
   if (server->host)
-    table->field[1]->store(server->host,
+    table->field[FEDERATED_FIELD_HOST]->store(server->host,
                            (uint) strlen(server->host), system_charset_info);
+  if (server->catalog)
+    table->field[FEDERATED_FIELD_CATALOG]->store(server->catalog,
+                           (uint) strlen(server->catalog), system_charset_info);
+
   if (server->db)
-    table->field[2]->store(server->db,
+    table->field[FEDERATED_FIELD_DB]->store(server->db,
                            (uint) strlen(server->db), system_charset_info);
   if (server->username)
-    table->field[3]->store(server->username,
+    table->field[FEDERATED_FIELD_USER]->store(server->username,
                            (uint) strlen(server->username), system_charset_info);
   if (server->password)
-    table->field[4]->store(server->password,
+    table->field[FEDERATED_FIELD_PASS]->store(server->password,
                            (uint) strlen(server->password), system_charset_info);
   if (server->port > -1)
-    table->field[5]->store(server->port);
+    table->field[FEDERATED_FIELD_PORT]->store(server->port);
 
   if (server->socket)
-    table->field[6]->store(server->socket,
+    table->field[FEDERATED_FIELD_SOCK]->store(server->socket,
                            (uint) strlen(server->socket), system_charset_info);
   if (server->scheme)
-    table->field[7]->store(server->scheme,
+    table->field[FEDERATED_FIELD_WRAPPER]->store(server->scheme,
                            (uint) strlen(server->scheme), system_charset_info);
   if (server->owner)
-    table->field[8]->store(server->owner,
+    table->field[FEDERATED_FIELD_OWNER]->store(server->owner,
                            (uint) strlen(server->owner), system_charset_info);
 }
 
@@ -635,14 +636,14 @@ int insert_server_record(TABLE *table, FOREIGN_SERVER *server)
   empty_record(table);
 
   /* set the field that's the PK to the value we're looking for */
-  table->field[0]->store(server->server_name,
+  table->field[FEDERATED_FIELD_NAME]->store(server->server_name,
                          server->server_name_length,
                          system_charset_info);
 
   /* read index until record is that specified in server_name */
   if (unlikely((error=
                 table->file->ha_index_read_idx_map(table->record[0], 0,
-                                                   (uchar *)table->field[0]->
+                                                   (uchar *)table->field[FEDERATED_FIELD_NAME]->
                                                    ptr,
                                                    HA_WHOLE_KEY,
                                                    HA_READ_KEY_EXACT))))
@@ -694,12 +695,10 @@ static int drop_server_internal(THD *thd, LEX_SERVER_OPTIONS *server_options)
   int error;
   TABLE_LIST tables;
   TABLE *table;
-  SQL_CATALOG *org_catalog= thd->catalog;
   DBUG_ENTER("drop_server_internal");
   DBUG_PRINT("info", ("server name server->server_name %s",
                       server_options->server_name.str));
 
-  thd->catalog= default_catalog();
   tables.init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_WRITE);
 
   /* hit the memory hit first */
@@ -725,7 +724,6 @@ static int drop_server_internal(THD *thd, LEX_SERVER_OPTIONS *server_options)
   }
 
 end:
-  thd->catalog= org_catalog;
   DBUG_RETURN(error);
 }
 
@@ -831,10 +829,8 @@ int update_server(THD *thd, FOREIGN_SERVER *existing, FOREIGN_SERVER *altered)
   int error;
   TABLE *table;
   TABLE_LIST tables;
-  SQL_CATALOG *org_catalog= thd->catalog;
   DBUG_ENTER("update_server");
 
-  thd->catalog= org_catalog;
   tables.init_one_mysql_table(&MYSQL_SERVERS_NAME, TL_WRITE);
 
   if (!(table= open_ltable(thd, &tables, TL_WRITE, MYSQL_LOCK_IGNORE_TIMEOUT)))
@@ -854,7 +850,6 @@ int update_server(THD *thd, FOREIGN_SERVER *existing, FOREIGN_SERVER *altered)
   servers_load(thd, &tables);
 
 end:
-  thd->catalog= org_catalog;
   DBUG_RETURN(error);
 }
 
@@ -938,6 +933,8 @@ void merge_server_struct(FOREIGN_SERVER *from, FOREIGN_SERVER *to)
   DBUG_ENTER("merge_server_struct");
   if (!to->host)
     to->host= strdup_root(&mem, from->host);
+  if (!to->catalog)
+    to->catalog= strdup_root(&mem, from->catalog);
   if (!to->db)
     to->db= strdup_root(&mem, from->db);
   if (!to->username)
@@ -989,13 +986,13 @@ update_server_record(TABLE *table, FOREIGN_SERVER *server)
 
   table->use_all_columns();
   /* set the field that's the PK to the value we're looking for */
-  table->field[0]->store(server->server_name,
-                         server->server_name_length,
-                         system_charset_info);
+  table->field[FEDERATED_FIELD_NAME]->store(server->server_name,
+                                            server->server_name_length,
+                                            system_charset_info);
 
   if (unlikely((error=
                 table->file->ha_index_read_idx_map(table->record[0], 0,
-                                                   (uchar *)table->field[0]->
+                                                   (uchar *)table->field[FEDERATED_FIELD_NAME]->
                                                    ptr,
                                                    ~(longlong)0,
                                                    HA_READ_KEY_EXACT))))
@@ -1051,11 +1048,12 @@ delete_server_record(TABLE *table, LEX_CSTRING *name)
   table->use_all_columns();
 
   /* set the field that's the PK to the value we're looking for */
-  table->field[0]->store(name->str, name->length, system_charset_info);
+  table->field[FEDERATED_FIELD_NAME]->store(name->str, name->length,
+                                            system_charset_info);
 
   if (unlikely((error=
                 table->file->ha_index_read_idx_map(table->record[0], 0,
-                                                   (uchar *)table->field[0]->
+                                                   (uchar *)table->field[FEDERATED_FIELD_NAME]->
                                                    ptr,
                                                    HA_WHOLE_KEY,
                                                    HA_READ_KEY_EXACT))))
@@ -1249,6 +1247,7 @@ prepare_server_struct_for_insert(LEX_SERVER_OPTIONS *server_options)
 
   SET_SERVER_OR_RETURN(host, "");
   SET_SERVER_OR_RETURN(db, "");
+  SET_SERVER_OR_RETURN(catalog, "");
   SET_SERVER_OR_RETURN(username, "");
   SET_SERVER_OR_RETURN(password, "");
   SET_SERVER_OR_RETURN(socket, "");
@@ -1302,6 +1301,7 @@ prepare_server_struct_for_update(LEX_SERVER_OPTIONS *server_options,
 
   SET_ALTERED(host);
   SET_ALTERED(db);
+  SET_ALTERED(catalog);
   SET_ALTERED(username);
   SET_ALTERED(password);
   SET_ALTERED(socket);
@@ -1383,6 +1383,7 @@ static FOREIGN_SERVER *clone_server(MEM_ROOT *mem, const FOREIGN_SERVER *server,
   
   /* TODO: We need to examine which of these can really be NULL */
   buffer->db= safe_strdup_root(mem, server->db);
+  buffer->catalog= safe_strdup_root(mem, server->catalog);
   buffer->scheme= safe_strdup_root(mem, server->scheme);
   buffer->username= safe_strdup_root(mem, server->username);
   buffer->password= safe_strdup_root(mem, server->password);

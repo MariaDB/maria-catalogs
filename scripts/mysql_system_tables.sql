@@ -196,6 +196,8 @@ CREATE TABLE IF NOT EXISTS index_stats (db_name varchar(64) NOT NULL, table_name
 
 set default_storage_engine=@orig_storage_engine;
 
+CREATE TABLE IF NOT EXISTS servers ( Server_name char(64) NOT NULL DEFAULT '', Host varchar(2048) NOT NULL DEFAULT '', Catalog char(64) NOT NULL DEFAULT '', Db char(64) NOT NULL DEFAULT '', Username char(128) NOT NULL DEFAULT '', Password char(64) NOT NULL DEFAULT '', Port INT(4) NOT NULL DEFAULT '0', Socket char(64) NOT NULL DEFAULT '', Wrapper char(64) NOT NULL DEFAULT '', Owner varchar(512) NOT NULL DEFAULT '', PRIMARY KEY (Server_name)) engine=Aria transactional=1 CHARACTER SET utf8 comment='MariaDB Foreign Servers table';
+
 --
 -- Drop some tables not used anymore in MariaDB
 --
