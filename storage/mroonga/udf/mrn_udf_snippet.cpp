@@ -31,6 +31,8 @@
 #include <mrn_variables.hpp>
 #include <mrn_current_thread.hpp>
 
+#include <sql_table.h>
+
 MRN_BEGIN_DECLS
 
 extern mrn::DatabaseManager *mrn_db_manager;
@@ -186,28 +188,27 @@ MRN_API my_bool mroonga_snippet_init(UDF_INIT *init, UDF_ARGS *args, char *messa
     strcpy(message, "mroonga_snippet() out of memory");
     goto error;
   }
+
+  if (!MRN_THD_DB_PATH(current_thd)) {
+    snprintf(message, MYSQL_ERRMSG_SIZE,
+        "mroonga_snippet(): no current database");
+    goto error;
+  }
+
   snip_info->ctx = mrn_context_pool->pull();
   {
-    const char *current_db_path = MRN_THD_DB_PATH(current_thd);
-    const char *action;
-    if (current_db_path) {
-      action = "open database";
-      mrn::Database *db;
-      int error = mrn_db_manager->open(current_db_path, &db);
-      if (error == 0) {
-        snip_info->db = db->get();
-        grn_ctx_use(snip_info->ctx, snip_info->db);
-        snip_info->use_shared_db = true;
-      }
+    char db_dir_path[FN_REFLEN + 1];
+    build_table_filename(current_thd->catalog, db_dir_path,
+        sizeof(db_dir_path) - 1, current_thd->db.str, "", "", 0);
+    mrn::Database *db;
+    int error = mrn_db_manager->open(db_dir_path, &db);
+    if (error == 0) {
+      snip_info->db = db->get();
+      grn_ctx_use(snip_info->ctx, snip_info->db);
+      snip_info->use_shared_db = true;
     } else {
-      action = "create anonymous database";
-      snip_info->db = grn_db_create(snip_info->ctx, NULL, NULL);
-      snip_info->use_shared_db = false;
-    }
-    if (!snip_info->db) {
       sprintf(message,
-              "mroonga_snippet(): failed to %s: %s",
-              action,
+              "mroonga_snippet(): failed to open database: %s",
               snip_info->ctx->errbuf);
       goto error;
     }
