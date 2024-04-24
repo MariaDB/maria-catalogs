@@ -117,10 +117,13 @@ let $script=
   s{SONAME ".*"}{SONAME "LIB"};
   s{DOLLARmysqltest_vardir}{MYSQLTEST_VARDIR}g;
   s{$binlog_database}{database};
+  s{USE CATALOG `DOLLARMARIADB_CATALOG`}{USE CATALOG `def`};
   $modify_binlog_name
 ||
 
---let $pre_script= my DOLLARmysqltest_vardir = DOLLARENV{'MYSQLTEST_VARDIR'};
+let $pre_script= my DOLLARmysqltest_vardir = DOLLARENV{'MYSQLTEST_VARDIR'};
+                 DOLLARMARIADB_CATALOG  = DOLLARENV{'MARIADB_CATALOG'};
+||
 
 --delimiter ;
 

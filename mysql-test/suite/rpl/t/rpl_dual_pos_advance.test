@@ -9,7 +9,9 @@
 source include/have_innodb.inc;
 
 --let $rpl_topology= 1->2->1
+--let $use_current_connection=1;
 --source include/rpl_init.inc
+--source include/not_catalogs_or_def.inc
 
 # now we test it
 

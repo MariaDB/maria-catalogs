@@ -4,6 +4,7 @@
 --connection slave
 call mtr.add_suppression("The automatically created table.*name may not be entirely in lowercase");
 
+--connection slave_config
 --source include/stop_slave.inc
 CHANGE MASTER TO master_use_gtid=slave_pos;
 
@@ -14,7 +15,7 @@ SET @@global.gtid_pos_auto_engines="innodb";
 --let $rpl_xa_check=SELECT $rpl_xa_check_lhs = $rpl_xa_check_rhs
 --source rpl_xa.inc
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 SET @@global.gtid_pos_auto_engines="";
 SET @@session.sql_log_bin=0;

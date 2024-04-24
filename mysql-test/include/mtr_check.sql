@@ -79,24 +79,29 @@ BEGIN
 
   -- Checksum system tables to make sure they have been properly
   -- restored after test
-  checksum table
+
+checksum table
     mysql.columns_priv,
     mysql.db,
+    mysql.procs_priv,
+    mysql.roles_mapping,
+    mysql.tables_priv,
+--  mysql.proc,
+    mysql.global_priv;
+
+  if (@@catalogs = 0 or catalog() = "def") then
+  checksum table
     mysql.func,
     mysql.help_category,
     mysql.help_keyword,
     mysql.help_relation,
     mysql.plugin,
---  mysql.proc,
-    mysql.procs_priv,
-    mysql.roles_mapping,
-    mysql.tables_priv,
     mysql.time_zone,
     mysql.time_zone_leap_second,
     mysql.time_zone_name,
     mysql.time_zone_transition,
-    mysql.time_zone_transition_type,
-    mysql.global_priv;
+    mysql.time_zone_transition_type;
+  END IF;
 
   -- verify that no plugin changed its disabled/enabled state
   SELECT * FROM INFORMATION_SCHEMA.PLUGINS

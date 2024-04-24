@@ -60,6 +60,7 @@ connection master;
 DROP PROCEDURE b50653_proc;
 sync_slave_with_master;
 connection slave;
+connection slave_config;
 connection master;
 DROP DATABASE B50653;
 sync_slave_with_master;

@@ -11,6 +11,7 @@
 #
 # [--let $slave_timeout= NUMBER]
 # [--let $rpl_debug= 1]
+# [--let $use_current_connection= 1]
 # --source include/start_slave.inc
 #
 # Parameters:
@@ -24,6 +25,12 @@
 --let $include_filename= start_slave.inc
 --source include/begin_include_file.inc
 
+if (!$use_current_connection)
+{
+--disable_connect_log
+--connection slave_config
+--enable_connect_log
+}
 
 if (!$rpl_debug)
 {
@@ -33,7 +40,6 @@ if (!$rpl_debug)
 
 START SLAVE;
 source include/wait_for_slave_to_start.inc;
-
 
 --let $include_filename= start_slave.inc
 --source include/end_include_file.inc

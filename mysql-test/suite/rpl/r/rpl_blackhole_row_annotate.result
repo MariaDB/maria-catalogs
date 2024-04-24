@@ -212,7 +212,7 @@ ROLLBACK/*!*/;
 /*!100001 SET @@session.gtid_seq_no=1*//*!*/;
 # at #
 #010909  4:46:40 server id #  end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=<xid>
-/*!110600 USE CATALOG `def` *//*!*/;
+/*!110000 USE CATALOG `def` *//*!*/;
 use `test`/*!*/;
 SET TIMESTAMP=1000000000/*!*/;
 SET @@session.pseudo_thread_id=#/*!*/;

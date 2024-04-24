@@ -14,6 +14,7 @@ sync_slave_with_master;
 connection slave;
 call mtr.add_suppression("Deadlock found when trying to get lock");
 call mtr.add_suppression("Commit failed due to failure of an earlier commit");
+connection slave_config;
 include/stop_slave.inc
 SET @old_parallel_threads= @@GLOBAL.slave_parallel_threads;
 SET @old_parallel_mode   = @@GLOBAL.slave_parallel_mode;
@@ -26,7 +27,7 @@ save_master_pos;
 connect  aux_slave,127.0.0.1,root,,test,$SLAVE_MYPORT,;
 BEGIN;
 INSERT INTO t1 VALUES (1);
-connection slave;
+connection slave_config;
 include/start_slave.inc
 connection aux_slave;
 connect  backup_slave,127.0.0.1,root,,test,$SLAVE_MYPORT,;
@@ -42,7 +43,7 @@ include/diff_tables.inc [master:t1,slave:t1]
 # MDEV-30423: dealock XA COMMIT vs BACKUP
 #
 # Normal XA COMMIT
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 connection master;
 connection aux_slave;
@@ -58,7 +59,7 @@ INSERT INTO t1 VALUES (102);
 connection master;
 XA COMMIT '1';
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/start_slave.inc
 connection aux_slave;
 # Xid '1' must be in the output:
@@ -72,12 +73,12 @@ connection aux_slave;
 ROLLBACK;
 connection backup_slave;
 BACKUP STAGE END;
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 include/stop_slave.inc
 #
 # Normal XA ROLLBACK
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 Warnings:
 Note	1255	Slave already has been stopped
@@ -95,7 +96,7 @@ INSERT INTO t1 VALUES (104);
 connection master;
 XA ROLLBACK '1';
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/start_slave.inc
 connection aux_slave;
 # Xid '1' must be in the output:
@@ -109,12 +110,12 @@ connection aux_slave;
 ROLLBACK;
 connection backup_slave;
 BACKUP STAGE END;
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 include/stop_slave.inc
 #
 # Errored out XA COMMIT
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 Warnings:
 Note	1255	Slave already has been stopped
@@ -132,7 +133,7 @@ INSERT INTO t1 VALUES (106);
 connection master;
 XA COMMIT '1';
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 SET @sav_innodb_lock_wait_timeout  = @@global.innodb_lock_wait_timeout;
 SET @sav_slave_transaction_retries = @@global.slave_transaction_retries;
 SET @@global.innodb_lock_wait_timeout =1;
@@ -150,16 +151,16 @@ connection aux_slave;
 ROLLBACK;
 connection backup_slave;
 BACKUP STAGE END;
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 SET @@global.innodb_lock_wait_timeout = @sav_innodb_lock_wait_timeout;
 SET @@global.slave_transaction_retries= @sav_slave_transaction_retries;
-connection slave;
+connection slave_config;
 include/start_slave.inc
 include/sync_with_master_gtid.inc
 #
 # Errored out XA ROLLBACK
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 connection master;
 connection aux_slave;
@@ -175,7 +176,7 @@ INSERT INTO t1 VALUES (108);
 connection master;
 XA ROLLBACK '1';
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 SET @sav_innodb_lock_wait_timeout  = @@global.innodb_lock_wait_timeout;
 SET @sav_slave_transaction_retries = @@global.slave_transaction_retries;
 SET @@global.innodb_lock_wait_timeout =1;
@@ -193,18 +194,18 @@ connection aux_slave;
 ROLLBACK;
 connection backup_slave;
 BACKUP STAGE END;
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 SET @@global.innodb_lock_wait_timeout = @sav_innodb_lock_wait_timeout;
 SET @@global.slave_transaction_retries= @sav_slave_transaction_retries;
-connection slave;
+connection slave_config;
 include/start_slave.inc
 include/sync_with_master_gtid.inc
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 SET @@global.slave_parallel_threads= @old_parallel_threads;
 SET @@global.slave_parallel_mode   = @old_parallel_mode;
 include/start_slave.inc
-connection server_1;
+connection master;
 DROP TABLE t1;
 include/rpl_end.inc

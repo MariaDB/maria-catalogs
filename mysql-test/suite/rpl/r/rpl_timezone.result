@@ -149,6 +149,7 @@ DROP TABLE t1;
 SET @@session.time_zone = default;
 sync_slave_with_master;
 connection slave;
+connection slave_config;
 include/stop_slave.inc
 connection master;
 reset master;

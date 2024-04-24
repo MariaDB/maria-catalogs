@@ -1,7 +1,8 @@
-include/rpl_init.inc [topology=1->2]
+include/master-slave.inc
+[connection master]
 call mtr.add_suppression("Slave: Commit failed due to failure of an earlier commit");
 call mtr.add_suppression("Slave: Duplicate entry '99'");
-connection server_1;
+connection master;
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
 CREATE TABLE t1 (a int PRIMARY KEY, b INT) ENGINE=InnoDB;
 INSERT INTO t1 VALUES(1,1);
@@ -9,7 +10,7 @@ INSERT INTO t1 VALUES(2,1);
 INSERT INTO t1 VALUES(3,1);
 INSERT INTO t1 VALUES(4,1);
 save_master_pos;
-connection server_2;
+connection slave;
 sync_with_master;
 SET @old_parallel_threads=@@GLOBAL.slave_parallel_threads;
 include/stop_slave.inc
@@ -19,7 +20,7 @@ SET GLOBAL slave_parallel_threads=4;
 CHANGE MASTER TO master_use_gtid=slave_pos;
 SET @old_parallel_mode=@@GLOBAL.slave_parallel_mode;
 SET GLOBAL slave_parallel_mode='optimistic';
-connection server_1;
+connection master;
 SET @@gtid_seq_no = 2001;
 BEGIN;
 UPDATE t1 SET b = 11  WHERE a = 4;
@@ -44,7 +45,7 @@ UPDATE t1 SET b = 12 WHERE a = 2;
 connect  slave_local_3, 127.0.0.1, root,, test, $SLAVE_MYPORT,;
 begin;
 UPDATE t1 SET b = 13 WHERE a = 3;
-connection server_2;
+connection slave;
 include/start_slave.inc
 # W4 is waiting to start its DROP
 connection slave_local_3;
@@ -68,16 +69,16 @@ include/wait_for_slave_sql_error.inc [errno=1062]
 DELETE FROM t1 WHERE a=99;
 include/start_slave.inc
 include/sync_with_master_gtid.inc
-connection server_2;
+connection slave;
 include/stop_slave.inc
 SET GLOBAL slave_parallel_mode=@old_parallel_mode;
 SET GLOBAL slave_parallel_threads=@old_parallel_threads;
 SET @@global.debug_dbug = @old_debug_dbug;
 SET debug_sync = RESET;
 include/start_slave.inc
-connection server_1;
+connection master;
 DROP TABLE t1;
 include/save_master_gtid.inc
-connection server_2;
+connection slave;
 include/sync_with_master_gtid.inc
 include/rpl_end.inc

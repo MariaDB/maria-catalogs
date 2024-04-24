@@ -1,5 +1,10 @@
+# We cannot use master-slave.inc here as this test swaps master and
+# slave.
+
 --let $rpl_topology=1->2
+--let $use_current_connection=1
 --source include/rpl_init.inc
+--source include/not_catalogs_or_def.inc
 
 --connection server_2
 --source include/stop_slave.inc

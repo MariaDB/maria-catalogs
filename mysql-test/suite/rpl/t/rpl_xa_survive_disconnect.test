@@ -71,10 +71,11 @@ XA COMMIT '2';
 
 XA COMMIT '1-row';
 XA COMMIT '1-stmt';
+--connection master_config
 source include/show_binlog_events.inc;
 
 # the proof: slave is in sync with the table updated by the prepared transactions.
---source include/sync_slave_sql_with_master.inc
+sync_slave_with_master slave_config;
 
 --source include/stop_slave.inc
 
@@ -144,10 +145,11 @@ while($i > 0)
 # Prove the slave applier is capable to resume the prepared XA:s
 # upon its restart.
 #
---connection slave
+--connection slave_config
 --source include/start_slave.inc
---connection master
+--connection master_config
 --source include/sync_slave_sql_with_master.inc
+--connection slave_config
 --source include/stop_slave.inc
 
 --connection master
@@ -166,7 +168,7 @@ while($i > 0)
 --let $rpl_server_number= 1
 --source include/rpl_restart_server.inc
 
---connection slave
+--connection slave_config
 --source include/start_slave.inc
 
 --connection master

@@ -1,39 +1,37 @@
-include/rpl_init.inc [topology=1->2]
+include/master-slave.inc
+[connection master]
 *** Test crashing master with InnoDB disabled, the binlog gtid state should still be correctly recovered. ***
-connection server_1;
+connection master;
 CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=MyISAM;
-save_master_pos;
-connection server_2;
-sync_with_master;
+sync_slave_with_master;
+connection slave;
+connection slave_config;
 include/stop_slave.inc
 CHANGE MASTER TO master_use_gtid=slave_pos;
 include/start_slave.inc
-connection server_1;
+connection master;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t1 VALUES (2);
-save_master_pos;
-connection server_2;
-sync_with_master;
+sync_slave_with_master;
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
 2
-connection server_1;
+connection master;
 FLUSH TABLES;
 SET SESSION debug_dbug="+d,crash_dispatch_command_before";
 SELECT 1;
 Got one of the listed errors
-connection server_1;
+# Ensure that all connections to master are active again
 INSERT INTO t1 VALUES (3);
-save_master_pos;
-connection server_2;
-sync_with_master;
+sync_slave_with_master;
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
 2
 3
-connection server_1;
+connection master;
 DROP TABLE t1;
-connection default;
 include/rpl_end.inc

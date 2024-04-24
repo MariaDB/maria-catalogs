@@ -1,13 +1,12 @@
 --source include/have_innodb.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
---connection server_2
+--connection slave_config
 --source include/stop_slave.inc
 CHANGE MASTER TO MASTER_USE_GTID=NO;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
 # Function to extract one GTID from a list.
 delimiter |;
@@ -20,10 +19,8 @@ BEGIN
   RETURN s;
 END|
 delimiter ;|
---save_master_pos
+--sync_slave_with_master slave_config
 
---connection server_2
---sync_with_master
 # Restart SQL thread to pick up ALTER TABLE of mysql.gtid_slave_pos.
 --source include/stop_slave.inc
 --source include/start_slave.inc
@@ -47,13 +44,13 @@ START SLAVE UNTIL master_gtid_pos = "";
 
 CHANGE MASTER TO master_use_gtid=slave_pos;
 
---connection server_1
+--connection master
 CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO t1 VALUES(1);
 --let $gtid_pos=`SELECT @@GLOBAL.gtid_binlog_pos`
 INSERT INTO t1 VALUES(2);
 
---connection server_2
+--connection slave
 
 # Test various incorrect syntax for UNTIL master_gtid_pos.
 --error ER_DUPLICATE_GTID_DOMAIN
@@ -72,10 +69,10 @@ SELECT * FROM t1;
 
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 SELECT * FROM t1 ORDER BY a;
 
@@ -92,20 +89,20 @@ START SLAVE UNTIL master_gtid_pos = "1-10-100,2-20-200,0-1-300";
 # (wait_for_slave_to_start.inc returns as soon as the IO thread is connected),
 # and we can get test failures from warnings in the log about IO thread being
 # killed in the middle of setting @@gtid_strict_mode or similar (MDEV-7940).
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (3);
 DELETE FROM t1 WHERE a=3;
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 --source include/stop_slave.inc
 
 
 --echo *** Test UNTIL condition in an earlier binlog than the start GTID. ***
---connection server_2
+--connection slave
 
---connection server_1
+--connection master
 SET gtid_domain_id = 1;
 INSERT INTO t1 VALUES (3);
 SET gtid_domain_id = 2;
@@ -136,7 +133,7 @@ SET gtid_domain_id = 0;
 --source include/show_binary_logs.inc
 --save_master_pos
 
---connection server_2
+--connection slave
 # Let the slave reach an middle point in domain 1 and a late point in domain 2.
 eval START SLAVE UNTIL master_gtid_pos='$d1_point2,$d2_point3';
 --source include/wait_for_slave_to_stop.inc
@@ -161,17 +158,17 @@ SELECT * FROM t2 ORDER BY a;
 
 --echo *** Test when the UNTIL position is right at the end of the binlog file prior to the starting position ***
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 FLUSH LOGS;
 SET gtid_domain_id = 1;
 INSERT INTO t1 VALUES (7);
 SET gtid_domain_id = 0;
 --save_master_pos
 
---connection server_2
+--connection slave
 eval START SLAVE UNTIL master_gtid_pos='$d1_point3';
 --source include/wait_for_slave_to_stop.inc
 # This should not show row 7, as we requested stop just before it.
@@ -183,16 +180,16 @@ SELECT * FROM t1 ORDER BY a;
 
 --echo *** Test when UNTIL condition is after a stand-alone event (not a transaction). ***
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 CREATE TABLE t3 (a INT);
 --let $until_condition=`SELECT @@GLOBAL.gtid_binlog_pos`
 DROP TABLE t3;
 --save_master_pos
 
---connection server_2
+--connection slave
 --replace_result $until_condition UNTIL_CONDITION
 eval START SLAVE UNTIL master_gtid_pos='$until_condition';
 --source include/wait_for_slave_to_stop.inc
@@ -202,13 +199,13 @@ SHOW CREATE TABLE t3;
 
 --echo *** Test UNTIL condition that has not yet been logged. ***
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 RESET SLAVE ALL;
 RESET MASTER;
 SET GLOBAL gtid_slave_pos='';
 
---connection server_1
+--connection master
 # Do it once to compute the right GTID, then throw it away and do it again
 # for the actual test.
 RESET MASTER;
@@ -221,19 +218,19 @@ DELETE FROM t1 WHERE a >= 10;
 RESET MASTER;
 INSERT INTO t1 VALUES (10);
 
---connection server_2
+--connection slave
 --replace_result $SERVER_MYPORT_1 SERVER_MYPORT_1
 eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $SERVER_MYPORT_1,
      master_user = "root", master_use_gtid = slave_pos;
 eval START SLAVE UNTIL master_gtid_pos = '$until_condition';
 --source include/wait_for_slave_to_start.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (11);
 INSERT INTO t1 VALUES (12);
 --save_master_pos
 
---connection server_2
+--connection slave
 # This then should wait until it gets the row (11) and then stop, not
 # yet having the row (12).
 --source include/wait_for_slave_to_stop.inc
@@ -245,7 +242,7 @@ SELECT * FROM t1 ORDER BY a;
 
 
 # Clean up.
---connection server_1
+--connection master
 DROP TABLE t1;
 DROP TABLE t2;
 DROP FUNCTION extract_gtid;

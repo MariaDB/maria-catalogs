@@ -2,19 +2,18 @@
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
 --source include/have_binlog_format_statement.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
 --echo *** Test killing transaction waiting in commit for previous transaction to commit, when not using 2-phase commit ***
 
---connection server_2
+--connection slave_config
 SET @old_parallel_threads=@@GLOBAL.slave_parallel_threads;
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=10;
 CHANGE MASTER TO master_use_gtid=slave_pos;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
 # Use a stored function to inject a debug_sync into the appropriate THD.
 # The function does nothing on the master, and on the slave it injects the
@@ -32,7 +31,7 @@ SET sql_log_bin=1;
 CREATE TABLE t3 (a INT PRIMARY KEY, b INT) ENGINE=InnoDB;
 --save_master_pos
 
---connection server_2
+--connection slave
 SET sql_log_bin=0;
 --delimiter ||
 CREATE FUNCTION foo(x INT, d1 VARCHAR(500), d2 VARCHAR(500))
@@ -63,7 +62,7 @@ send INSERT INTO t3 VALUES (31, foo(31,
     'ha_commit_one_phase WAIT_FOR t2_waiting',
     'commit_one_phase_2 SIGNAL t1_ready WAIT_FOR t1_cont'));
 
---connection server_1
+--connection master
 SET debug_sync='now WAIT_FOR master_queued1';
 
 --connect (con_temp4,127.0.0.1,root,,test,$SERVER_MYPORT_1,)
@@ -83,7 +82,7 @@ INSERT INTO t3 VALUES (33, foo(33,
     'wait_for_prior_commit_killed SIGNAL t2_killed'));
 send COMMIT;
 
---connection server_1
+--connection master
 SET debug_sync='now WAIT_FOR master_queued2';
 
 --connect (con_temp5,127.0.0.1,root,,test,$SERVER_MYPORT_1,)
@@ -94,7 +93,7 @@ send INSERT INTO t3 VALUES (34, foo(34,
     '',
     ''));
 
---connection server_1
+--connection master
 SET debug_sync='now WAIT_FOR master_queued3';
 SET debug_sync='now SIGNAL master_cont1';
 
@@ -105,10 +104,10 @@ REAP;
 --connection con_temp5
 REAP;
 
---connection server_1
+--connection master
 SELECT * FROM t3 WHERE a >= 30 ORDER BY a;
 
---connection server_2
+--connection slave
 SET sql_log_bin=0;
 CALL mtr.add_suppression("Query execution was interrupted");
 CALL mtr.add_suppression("Commit failed due to failure of an earlier commit on which this one depends");
@@ -155,11 +154,11 @@ CREATE FUNCTION foo(x INT, d1 VARCHAR(500), d2 VARCHAR(500))
 --delimiter ;
 SET sql_log_bin=1;
 
---connection server_1
+--connection master
 INSERT INTO t3 VALUES (39,0);
 --save_master_pos
 
---connection server_2
+--connection slave
 --source include/start_slave.inc
 --sync_with_master
 SELECT * FROM t3 WHERE a >= 30 ORDER BY a;
@@ -183,7 +182,7 @@ CREATE FUNCTION foo(x INT, d1 VARCHAR(500), d2 VARCHAR(500))
 SET sql_log_bin=1;
 
 
---connection server_2
+--connection slave_config
 # Respawn all worker threads to clear any left-over debug_sync or other stuff.
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=0;
@@ -191,13 +190,13 @@ SET GLOBAL slave_parallel_threads=10;
 --source include/start_slave.inc
 
 
---connection server_2
+--connection slave_config
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=@old_parallel_threads;
 SET debug_sync = 'reset';
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 DROP function foo;
 DROP TABLE t3;
 SET debug_sync = 'reset';

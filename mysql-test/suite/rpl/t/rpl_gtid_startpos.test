@@ -1,21 +1,21 @@
 --source include/have_innodb.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
 --echo *** Test connecting with empty GTID state to start from very beginning of binlog ***
---connection server_2
+--connection slave_config
 --source include/stop_slave.inc
 RESET MASTER;
 RESET SLAVE;
 
---connection server_1
+--connection master_config
 RESET MASTER;
+--connection master
 # Create an empty binlog file, to check that empty binlog state is handled correctly.
 FLUSH LOGS;
 CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 --save_master_pos
 
---connection server_2
+--connection slave
 SET GLOBAL gtid_slave_pos="";
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $MASTER_MYPORT,
@@ -24,17 +24,17 @@ eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $MASTER_MYPORT,
 --sync_with_master
 SELECT * FROM t1;
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (1);
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 SELECT * FROM t1;
 --source include/stop_slave.inc
 
 --echo *** Test that master gives error when slave asks for empty gtid pos and binlog files have been purged. ***
---connection server_1
+--connection master
 FLUSH LOGS;
 INSERT INTO t1 VALUES (2);
 --save_master_pos
@@ -42,7 +42,7 @@ INSERT INTO t1 VALUES (2);
 --source include/wait_for_purge.inc
 --source include/show_binary_logs.inc
 
---connection server_2
+--connection slave
 SET GLOBAL gtid_slave_pos="";
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $MASTER_MYPORT,
@@ -65,11 +65,11 @@ SET sql_log_bin=1;
 --echo *** Test that we give warning when explict @@gtid_slave_pos=xxx that conflicts with what is in our binary log ***
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES(3);
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 SET GLOBAL gtid_slave_pos='0-1-3';
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $MASTER_MYPORT,
@@ -79,11 +79,11 @@ eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $MASTER_MYPORT,
 SELECT * FROM t1 ORDER by a;
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (4);
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 # Now add some local transactions that conflict with the GTID position
 # being set for @@gtid_slave_pos.
 INSERT INTO t1 VALUES (10);
@@ -97,36 +97,36 @@ START SLAVE;
 --source include/sync_with_master_gtid.inc
 SELECT * FROM t1 ORDER by a;
 
---connection server_1
+--connection master
 DROP TABLE t1;
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 
 
 --echo *** MDEV-4275: I/O thread restart duplicates events in relay log ***
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 RESET SLAVE ALL;
 RESET MASTER;
 
---connection server_1
+--connection master
 RESET MASTER;
 
---connection server_2
+--connection slave
 SET GLOBAL gtid_slave_pos='';
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval CHANGE MASTER TO master_host='127.0.0.1', master_port=$MASTER_MYPORT, master_user='root', master_use_gtid=slave_pos;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 CREATE TABLE t1 (a INT PRIMARY KEY);
 INSERT INTO t1 VALUES (1);
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 SELECT * FROM t1;
 
@@ -134,11 +134,11 @@ SELECT * FROM t1;
 START SLAVE IO_THREAD;
 --source include/wait_for_slave_io_to_start.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (2);
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 
 SELECT * FROM t1 ORDER BY a;
@@ -152,7 +152,7 @@ SELECT * FROM t1 ORDER BY a;
 # that the code did not catch the error of missing RESET MASTER when an
 # empty GTID_SLAVE_POS='' was specified.
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 DROP TABLE t1;
 RESET SLAVE;
@@ -168,7 +168,7 @@ SELECT * FROM t1 ORDER BY a;
 # Same thing, but this time using SQL_LOG_BIN=0 to avoid polluting the
 # slave binlog.
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 SET SQL_LOG_BIN=0;
 DROP TABLE t1;
@@ -202,11 +202,11 @@ STOP SLAVE IO_THREAD;
 CHANGE MASTER TO MASTER_USE_GTID=SLAVE_POS;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES(3);
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 --source include/sync_with_master_gtid.inc
 SELECT * FROM t1 ORDER BY a;
 SET SQL_LOG_BIN=0;
@@ -216,16 +216,16 @@ SET SQL_LOG_BIN=1;
 
 --echo *** Test reconnecting slave with GTID after purge logs on master. ***
 
---connection server_1
+--connection master
 FLUSH LOGS;
 INSERT INTO t1 VALUES (4);
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 --source include/sync_with_master_gtid.inc
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 FLUSH LOGS;
 FLUSH LOGS;
 --let $purge_binlogs_to=master-bin.000004
@@ -234,7 +234,7 @@ FLUSH LOGS;
 INSERT INTO t1 VALUES (5);
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval CHANGE MASTER TO master_host = '127.0.0.1', master_port = $MASTER_MYPORT;
 --source include/start_slave.inc
@@ -244,18 +244,18 @@ SELECT * FROM t1 ORDER BY a;
 
 --echo *** Test modifying binlog on slave and the effect on GTID state. ***
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 RESET MASTER;
 SET GLOBAL gtid_slave_pos="";
 
---connection server_1
+--connection master
 RESET MASTER;
 TRUNCATE TABLE t1;
 INSERT INTO t1 VALUES (10);   # Will be GTID 0-1-2
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 --source include/start_slave.inc
 --source include/sync_with_master_gtid.inc
 
@@ -283,7 +283,7 @@ eval SELECT '$value' AS Gtid_Slave_Pos;
 
 
 --echo *** MDEV-4483: Slave loses traditional master coordinates immediately on CHANGE MASTER TO MASTER_USE_GTID = 1 ***
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 DROP TABLE t1;
 RESET SLAVE ALL;
@@ -297,20 +297,20 @@ SET GLOBAL gtid_slave_pos= "";
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval CHANGE MASTER TO master_host='127.0.0.1', master_port=$MASTER_MYPORT, master_user='root', master_use_gtid=no, master_log_file="", master_log_pos= 4;
 
---connection server_1
+--connection master
 DROP TABLE t1;
 RESET MASTER;
 
 CREATE TABLE t1 (a INT PRIMARY KEY);
 --save_master_pos
 
---connection server_2
+--connection slave
 --source include/start_slave.inc
 --sync_with_master
 
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (1);
 --let $log_file1= query_get_value(SHOW MASTER STATUS, "File", 1)
 --let $log_pos1= query_get_value(SHOW MASTER STATUS, "Position", 1)
@@ -319,7 +319,7 @@ INSERT INTO t1 VALUES (2);
 --let $log_pos2= query_get_value(SHOW MASTER STATUS, "Position", 1)
 --save_master_pos
 
---connection server_2
+--connection slave
 # Get the slave to a point where the IO thread has fetched one event ahead
 # of the SQL thread (we want to test that CHANGE MASTER does not mess with
 # existing relay logs).
@@ -352,9 +352,9 @@ CHANGE MASTER TO master_use_gtid=no;
 SELECT * FROM t1 ORDER BY a;
 
 # Clean up.
---connection server_1
+--connection master
 DROP TABLE t1;
---connection server_2
+--connection slave
 set @@global.slave_ddl_exec_mode=@save_slave_ddl_exec_mode;
 
 --source include/rpl_end.inc

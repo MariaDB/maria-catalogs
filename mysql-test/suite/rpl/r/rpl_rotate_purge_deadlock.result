@@ -1,6 +1,7 @@
 include/master-slave.inc
 [connection master]
 connection master;
+include/show_binary_logs.inc
 show binary logs;
 Log_name	File_size
 master-bin.000001	#
@@ -10,12 +11,14 @@ SET DEBUG_SYNC = 'after_purge_logs_before_date SIGNAL continued';
 insert into t1 set f=repeat('a', 4096);
 connection master1;
 *** there must be two logs in the list ***
+include/show_binary_logs.inc
 show binary logs;
 Log_name	File_size
 master-bin.000001	#
 master-bin.000002	#
 insert into t1 set f=repeat('b', 4096);
 *** there must be three logs in the list ***
+include/show_binary_logs.inc
 show binary logs;
 Log_name	File_size
 master-bin.000001	#

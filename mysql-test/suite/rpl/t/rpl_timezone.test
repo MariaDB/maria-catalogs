@@ -172,6 +172,7 @@ connection master;
 DROP TABLE t1;
 SET @@session.time_zone = default;
 --sync_slave_with_master
+--connection slave_config
 --source include/stop_slave.inc
 
 # Bug#41719 delayed INSERT into timestamp col needs set time_zone for concurrent binlogging

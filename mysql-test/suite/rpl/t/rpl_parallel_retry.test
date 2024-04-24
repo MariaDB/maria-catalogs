@@ -2,12 +2,11 @@
 --source include/have_perfschema.inc
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
 --echo *** Test retry of transactions that fail to replicate due to deadlock or similar temporary error. ***
 
---connection server_1
+--connection master
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
 CREATE TABLE t1 (a int PRIMARY KEY, b INT) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1,1);
@@ -27,7 +26,7 @@ CREATE FUNCTION foo(x INT, d1 VARCHAR(500), d2 VARCHAR(500))
 --delimiter ;
 SET sql_log_bin=1;
 
---connection server_2
+--connection slave
 SET @old_parallel_threads=@@GLOBAL.slave_parallel_threads;
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=5;
@@ -51,7 +50,7 @@ CREATE FUNCTION foo(x INT, d1 VARCHAR(500), d2 VARCHAR(500))
 SET sql_log_bin=1;
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 SET gtid_seq_no = 100;
 BEGIN;
 INSERT INTO t1 VALUES (2,1);
@@ -61,7 +60,7 @@ COMMIT;
 SELECT * FROM t1 ORDER BY a;
 --save_master_pos
 
---connection server_2
+--connection slave
 SET @old_dbug= @@GLOBAL.debug_dbug;
 SET GLOBAL debug_dbug="+d,rpl_parallel_simulate_temp_err_gtid_0_x_100";
 let $old_retry= query_get_value(SHOW STATUS LIKE 'Slave_retried_transactions', Value, 1);
@@ -79,11 +78,10 @@ source include/assert.inc;
 
 SELECT * FROM t1 ORDER BY a;
 
-
 --echo *** Test that double retry works when the first retry also fails with temp error ***
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 SET gtid_seq_no = 100;
 SET @old_server_id = @@server_id;
 SET server_id = 10;
@@ -97,7 +95,7 @@ SET server_id = @old_server_id;
 SELECT * FROM t1 ORDER BY a;
 --save_master_pos
 
---connection server_2
+--connection slave
 SET @old_dbug= @@GLOBAL.debug_dbug;
 SET GLOBAL debug_dbug="+d,rpl_parallel_simulate_temp_err_gtid_0_x_100,rpl_parallel_simulate_double_temp_err_gtid_0_x_100";
 let $old_retry= query_get_value(SHOW STATUS LIKE 'Slave_retried_transactions', Value, 1);
@@ -118,7 +116,7 @@ SELECT * FROM t1 ORDER BY a;
 --echo *** Test too many retries, eventually causing failure. ***
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 SET gtid_seq_no = 100;
 SET @old_server_id = @@server_id;
 SET server_id = 11;
@@ -132,7 +130,7 @@ SET server_id = @old_server_id;
 SELECT * FROM t1 ORDER BY a;
 --save_master_pos
 
---connection server_2
+--connection slave
 SET sql_log_bin=0;
 CALL mtr.add_suppression("Slave worker thread retried transaction 10 time\\(s\\) in vain, giving up");
 CALL mtr.add_suppression("Slave: Deadlock found when trying to get lock; try restarting transaction");
@@ -165,18 +163,18 @@ SELECT * FROM t1 ORDER BY a;
 
 --echo *** Test retry of event group that spans multiple relay log files. ***
 
---connection server_1
+--connection master
 CREATE TABLE t2 (a int PRIMARY KEY, b BLOB) ENGINE=InnoDB;
 INSERT INTO t2 VALUES (1,"Hulubullu");
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 --source include/stop_slave.inc
 SET @old_max= @@GLOBAL.max_relay_log_size;
 SET GLOBAL max_relay_log_size=4096;
 
---connection server_1
+--connection master
 --let $big= `SELECT REPEAT("*", 5000)`
 SET gtid_seq_no = 100;
 SET @old_server_id = @@server_id;
@@ -193,7 +191,7 @@ SELECT * FROM t1 WHERE a >= 10 ORDER BY a;
 SELECT a, LENGTH(b) FROM t2 ORDER BY a;
 --save_master_pos
 
---connection server_2
+--connection slave
 SET @old_dbug= @@GLOBAL.debug_dbug;
 SET GLOBAL debug_dbug="+d,rpl_parallel_simulate_temp_err_gtid_0_x_100";
 let $old_retry= query_get_value(SHOW STATUS LIKE 'Slave_retried_transactions', Value, 1);
@@ -211,14 +209,14 @@ source include/assert.inc;
 SELECT * FROM t1 WHERE a >= 10 ORDER BY a;
 SELECT a, LENGTH(b) FROM t2 ORDER BY a;
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (11,11);
 --disable_query_log
 eval INSERT INTO t2 VALUES (4, "$big");
 --enable_query_log
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 SELECT * FROM t1 WHERE a >= 10 ORDER BY a;
 SELECT a, LENGTH(b) FROM t2 ORDER BY a;
@@ -227,10 +225,10 @@ SET GLOBAL max_relay_log_size=@old_max;
 
 --echo *** MDEV-7065: Incorrect relay log position in parallel replication after retry of transaction ***
 
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 BEGIN;
 INSERT INTO t1 VALUES (100, 0);
 INSERT INTO t1 VALUES (101, 0);
@@ -240,7 +238,7 @@ COMMIT;
 SELECT * FROM t1 WHERE a >= 100 ORDER BY a;
 --save_master_pos
 
---connection server_2
+--connection slave
 # Inject a DBUG error insert to cause the XID event of the single transaction
 # from the master to fail with a deadlock error and be retried.
 # The bug was that the retry of the XID would leave the relay log position
@@ -265,7 +263,7 @@ SELECT * FROM t1 WHERE a >= 100 ORDER BY a;
 # middle of an event and fail with relay log IO error.
 --source include/stop_slave_sql.inc
 
---connection server_1
+--connection master
 INSERT INTO t1 VALUES (104, 1);
 INSERT INTO t1 VALUES (105, 1);
 INSERT INTO t1 VALUES (106, 1);
@@ -274,7 +272,7 @@ INSERT INTO t1 VALUES (108, 1);
 INSERT INTO t1 VALUES (109, 1);
 --save_master_pos
 
---connection server_2
+--connection slave
 --source include/start_slave.inc
 --sync_with_master
 SELECT * FROM t1 WHERE a >= 100 ORDER BY a;
@@ -282,7 +280,7 @@ SELECT * FROM t1 WHERE a >= 100 ORDER BY a;
 
 --echo *** MDEV-6917: Parallel replication: "Commit failed due to failure of an earlier commit on which this one depends", but no prior failure seen **
 
---connection server_1
+--connection master
 CREATE TABLE t3 (a INT PRIMARY KEY, b INT, KEY b_idx(b)) ENGINE=InnoDB;
 INSERT INTO t3 VALUES (1,NULL), (2,2), (3,NULL), (4,4), (5, NULL), (6, 6);
 CREATE TABLE t4 (a INT PRIMARY KEY, b INT) ENGINE=InnoDB;
@@ -296,12 +294,12 @@ SET @old_format= @@SESSION.binlog_format;
 SET binlog_format='statement';
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 --source include/stop_slave.inc
 CHANGE MASTER TO master_use_gtid=no;
 
---connection server_1
+--connection master
 
 # Create a group commit with three transactions T1, T2, T3.
 # T2 will block T1 on the slave where we will make it run first, so it will be
@@ -317,7 +315,7 @@ INSERT INTO t4 VALUES (10, foo(1, 'before_execute_sql_command WAIT_FOR t1_start'
 UPDATE t3 SET b=NULL WHERE a=6;
 SET debug_sync='commit_after_release_LOCK_prepare_ordered SIGNAL master_queued1 WAIT_FOR master_cont1';
 send COMMIT;
---connection server_1
+--connection master
 SET debug_sync='now WAIT_FOR master_queued1';
 
 --connect (con2,127.0.0.1,root,,test,$SERVER_MYPORT_1,)
@@ -329,7 +327,7 @@ DELETE FROM t3 WHERE b <= 3;
 SET debug_sync='commit_after_release_LOCK_prepare_ordered SIGNAL master_queued2';
 send COMMIT;
 
---connection server_1
+--connection master
 SET debug_sync='now WAIT_FOR master_queued2';
 
 --connect (con3,127.0.0.1,root,,test,$SERVER_MYPORT_1,)
@@ -341,7 +339,7 @@ INSERT INTO t3 VALUES (7,7);
 SET debug_sync='commit_after_release_LOCK_prepare_ordered SIGNAL master_queued3';
 send COMMIT;
 
---connection server_1
+--connection master
 SET debug_sync='now WAIT_FOR master_queued3';
 SET debug_sync='now SIGNAL master_cont1';
 
@@ -356,12 +354,12 @@ REAP;
 SET debug_sync='RESET';
 SET binlog_format=@old_format;
 
---connection server_1
+--connection master
 --save_master_pos
 SELECT * FROM t3 ORDER BY a;
 
 
---connection server_2
+--connection slave
 let $old_retry= query_get_value(SHOW STATUS LIKE 'Slave_retried_transactions', Value, 1);
 SET @old_dbug=@@GLOBAL.debug_dbug;
 SET GLOBAL debug_dbug="+d,thd_need_ordering_with_force";
@@ -394,34 +392,34 @@ source include/assert.inc;
 SELECT * FROM t3 ORDER BY a;
 
 
---connection server_1
+--connection master
 SET binlog_format=@old_format;
 
 
 # Clean up of the above part.
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=@old_parallel_threads;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 DROP TABLE t1, t2, t3, t4;
 DROP function foo;
 
---sync_slave_with_master server_2
+--sync_slave_with_master slave
 
 #
 # MDEV-12746 rpl.rpl_parallel_optimistic_nobinlog fails committing out of order at retry
 #
 
---connection server_1
+--connection master
 CREATE TABLE t1 (a int PRIMARY KEY, b INT) ENGINE=InnoDB;
 # MDEV-515 takes X-lock on the table for the first insert.
 # So concurrent insert won't happen on the table
 INSERT INTO t1 VALUES(100, 100);
 
 # Replicate create-t1 and prepare to re-start slave in optimistic mode
---sync_slave_with_master server_2
+--sync_slave_with_master slave
 --source include/stop_slave.inc
 SET @old_parallel_threads=@@GLOBAL.slave_parallel_threads;
 SET @@GLOBAL.slave_parallel_threads=5;
@@ -442,14 +440,14 @@ BEGIN;
   INSERT INTO t1 SET a=2,b=2;
 
 --echo # Master payload
---connection server_1
+--connection master
 SET @@SESSION.GTID_SEQ_NO=1000;
 INSERT INTO t1 SET a=1,b=1;
 SET @@SESSION.GTID_SEQ_NO=1001;
 INSERT INTO t1 SET a=2,b=1;
 
 --echo # Start slave whose both appliers is destined to being blocked
---connection server_2
+--connection slave
 SET @old_dbug= @@GLOBAL.debug_dbug;
 SET @@GLOBAL.debug_dbug="+d,rpl_parallel_simulate_wait_at_retry";
 --source include/start_slave.inc
@@ -470,7 +468,7 @@ ROLLBACK;
 --echo # Release the 2nd worker to proceed
 --connection spoiler_22
 ROLLBACK;
---connection server_2
+--connection slave
 SET @@DEBUG_SYNC='now SIGNAL proceed_by_1001';
 
 --echo # observe how it all ends
@@ -496,7 +494,7 @@ if (`SELECT count(*) = 1 FROM t1 WHERE a = 2`)
 #
 # Clean up
 #
---connection server_2
+--connection slave
 --source include/stop_slave.inc
 SET @@GLOBAL.slave_parallel_threads=@old_parallel_threads;
 SET @@GLOBAL.slave_parallel_mode=@old_parallel_mode;
@@ -506,9 +504,9 @@ SET @@GLOBAL.debug_dbug=@old_dbug;
 SET debug_sync='RESET';
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 DROP TABLE t1;
 
---sync_slave_with_master server_2
+--sync_slave_with_master slave
 
 --source include/rpl_end.inc

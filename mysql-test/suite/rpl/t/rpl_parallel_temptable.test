@@ -3,27 +3,23 @@
 --source include/have_binlog_format_statement.inc
 # Valgrind does not work well with test that crashes the server
 --source include/not_valgrind.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
 --echo *** MDEV-6321: close_temporary_tables() in format description event not serialised correctly ***
 
---connection server_2
+--connection slave_config
 SET @old_parallel_threads=@@GLOBAL.slave_parallel_threads;
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=5;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 CREATE TABLE t1 (a INT PRIMARY KEY, b VARCHAR(100) CHARACTER SET utf8);
---save_master_pos
 
---connection server_2
---sync_with_master
+--sync_slave_with_master slave_config
 --source include/stop_slave.inc
+--connection master
 
-
---connection server_1
 SET gtid_domain_id= 1;
 INSERT INTO t1 VALUES (1, 0);
 
@@ -36,7 +32,7 @@ CREATE TEMPORARY TABLE t4 (a int);
 INSERT INTO t3 VALUES (100);
 INSERT INTO t4 SELECT a+1 FROM t3;
 
---connection server_1
+--connection master
 INSERT INTO t2 VALUES (2), (4), (6), (8), (10), (12), (14), (16), (18), (20);
 INSERT INTO t2 VALUES (3), (6), (9), (12), (15), (18);
 INSERT INTO t2 VALUES (4), (8), (12), (16), (20);
@@ -45,7 +41,7 @@ INSERT INTO t2 VALUES (4), (8), (12), (16), (20);
 INSERT INTO t3 SELECT a+2 FROM t4;
 INSERT INTO t4 SELECT a+4 FROM t3;
 
---connection server_1
+--connection master
 INSERT INTO t2 VALUES (5), (10), (15), (20);
 INSERT INTO t2 VALUES (6), (12), (18);
 INSERT INTO t2 VALUES (7), (14);
@@ -57,7 +53,7 @@ INSERT INTO t2 VALUES (10), (20);
 INSERT INTO t3 SELECT a+8 FROM t4;
 INSERT INTO t4 SELECT a+16 FROM t3;
 
---connection server_1
+--connection master
 INSERT INTO t2 VALUES (11);
 INSERT INTO t2 VALUES (12);
 INSERT INTO t2 VALUES (13);
@@ -65,7 +61,7 @@ INSERT INTO t2 VALUES (13);
 --connection default
 INSERT INTO t3 SELECT a+32 FROM t4;
 
---connection server_1
+--connection master
 INSERT INTO t2 VALUES (14);
 INSERT INTO t2 VALUES (15);
 INSERT INTO t2 VALUES (16);
@@ -73,7 +69,7 @@ INSERT INTO t2 VALUES (16);
 --connection default
 INSERT INTO t4 SELECT a+64 FROM t3;
 
---connection server_1
+--connection master
 INSERT INTO t2 VALUES (17);
 INSERT INTO t2 VALUES (18);
 INSERT INTO t2 VALUES (19);
@@ -81,14 +77,14 @@ INSERT INTO t2 VALUES (19);
 --connection default
 INSERT INTO t3 SELECT a+128 FROM t4;
 
---connection server_1
+--connection master
 INSERT INTO t2 VALUES (20);
 
 --connection default
 INSERT INTO t1 SELECT a, a MOD 7 FROM t3;
 INSERT INTO t1 SELECT a, a MOD 7 FROM t4;
 
---connection server_1
+--connection master
 INSERT INTO t1 SELECT a, COUNT(*) FROM t2 GROUP BY a;
 
 # Crash the master server, so that temporary tables are implicitly dropped.
@@ -113,14 +109,13 @@ EOF
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 
---connection server_1
---enable_reconnect
---source include/wait_until_connected_again.inc
+--source include/reconnect_master.inc
+--connection master
 
 INSERT INTO t1 VALUES (0, 1);
 --save_master_pos
 
---connection server_2
+--connection slave_config
 # Start the slave replicating the events.
 # The bug was that the format description event written after the crash could
 # be fetched ahead of the execution of the temporary table events and executed
@@ -129,7 +124,7 @@ INSERT INTO t1 VALUES (0, 1);
 
 --source include/start_slave.inc
 --sync_with_master
-
+--connection slave
 SELECT * FROM t1 WHERE a <= 20 ORDER BY a;
 SELECT COUNT(*) FROM t1 WHERE a BETWEEN 100+0 AND 100+256;
 SHOW STATUS LIKE 'Slave_open_temp_tables';
@@ -139,7 +134,7 @@ SHOW STATUS LIKE 'Slave_open_temp_tables';
 
 --source include/stop_slave.inc
 
---connection server_1
+--connection master
 CALL mtr.add_suppression("Statement accesses nontransactional table as well as transactional or temporary table, and writes to any of them");
 SET gtid_domain_id= 1;
 DELETE FROM t1;
@@ -154,14 +149,14 @@ CREATE TEMPORARY TABLE t3 (a INT PRIMARY KEY);
 INSERT INTO t3 VALUES (10);
 INSERT INTO t3 VALUES (20);
 
---connection server_1
-INSERT INTO t1 SELECT a, 'server_1' FROM t2;
+--connection master
+INSERT INTO t1 SELECT a, 'master' FROM t2;
 
 --connection default
 INSERT INTO t1 SELECT a, 'default' FROM t3;
 
---connection server_1
-INSERT INTO t1 SELECT a+2, '+server_1' FROM t2;
+--connection master
+INSERT INTO t1 SELECT a+2, '+master' FROM t2;
 
 # Crash the master server in the middle of writing an event group.
 --write_file $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -171,7 +166,7 @@ EOF
 FLUSH TABLES;
 SET SESSION debug_dbug="+d,crash_before_writing_xid";
 --error 2006,2013
-INSERT INTO t1 SELECT a+4, '++server_1' FROM t2;
+INSERT INTO t1 SELECT a+4, '++master' FROM t2;
 
 --source include/wait_until_disconnected.inc
 --connection default
@@ -185,15 +180,13 @@ EOF
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 
---connection server_1
---enable_reconnect
---source include/wait_until_connected_again.inc
+--source include/reconnect_master.inc
 
 INSERT INTO t1 VALUES (0, 1);
 #--save_master_pos
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 # Start the slave replicating the events.
 # The main thing to test here is that the slave will know that it
 # needs to abort the partially received event group, so that the
@@ -214,14 +207,14 @@ set @@global.debug_dbug="";
 SELECT * FROM t1 ORDER BY a;
 SHOW STATUS LIKE 'Slave_open_temp_tables';
 
---connection server_1
+--connection master
 # This FLUSH can be removed once MDEV-6608 is fixed.
 FLUSH LOGS;
 
 
 --echo *** MDEV-7936: Assertion `!table || table->in_use == _current_thd()' failed on parallel replication in optimistic mode ***
 
---connection server_1
+--connection master
 CREATE TEMPORARY TABLE t4 (a INT PRIMARY KEY) ENGINE=InnoDB;
 SET @old_dbug= @@SESSION.debug_dbug;
 SET SESSION debug_dbug="+d,binlog_force_commit_id";
@@ -234,16 +227,17 @@ DROP TEMPORARY TABLE t4;
 SELECT * FROM t1 WHERE a >= 30 ORDER BY a;
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave
 --source include/sync_with_master_gtid.inc
 
 SELECT * FROM t1 WHERE a >= 30 ORDER BY a;
 
+--connection slave_config
 --source include/stop_slave.inc
 SET @old_mode= @@GLOBAL.slave_parallel_mode;
 SET GLOBAL slave_parallel_mode=optimistic;
 
---connection server_1
+--connection master
 CREATE TEMPORARY TABLE t4 (a INT PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO t4 VALUES (32);
 INSERT INTO t4 VALUES (33);
@@ -253,25 +247,26 @@ DROP TEMPORARY TABLE t4;
 SELECT * FROM t1 WHERE a >= 30 ORDER BY a;
 --source include/save_master_gtid.inc
 
---connection server_2
+--connection slave_config
 --source include/start_slave.inc
 --source include/sync_with_master_gtid.inc
+--connection slave
 
 SELECT * FROM t1 WHERE a >= 30 ORDER BY a;
 
+--connection slave_config
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_mode=@old_mode;
 --source include/start_slave.inc
 
-
 # Clean up.
 
---connection server_2
+--connection slave_config
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=@old_parallel_threads;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 DROP TABLE t1;
 
 --source include/rpl_end.inc

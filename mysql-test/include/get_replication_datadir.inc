@@ -1,11 +1,10 @@
 # Get the catalog or base directory for replication
 
 # Sets the following variables
-# $MASTER_DATADIR   The master data directory
+# $MASTER_DATADIR   The master data directory (where the database dirs are)
 # $MASTER_TOPDIR    The master topdir (select @@datadir)
-# $SLAVE_DATADIR    The slave datadir directory
+# $SLAVE_DATADIR    The slave datadir directory (where the databases dirs are)
 # $SLAVE_TOPDIR     The slave topdir (select @@datadir)
-# $USING_CATALOGS   1 if catalogs, 0 if no catalogs
 
 # Note that the connection is set to master at end of script
 

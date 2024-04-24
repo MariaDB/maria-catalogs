@@ -11,7 +11,7 @@
 --source include/have_binlog_format_mixed.inc
 --source include/master-slave.inc
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 CHANGE MASTER TO MASTER_USE_GTID=NO;
 --source include/start_slave.inc
@@ -26,10 +26,9 @@ call mtr.add_suppression('Master is configured to log replication events with ch
 # A. read/write access to the global vars:
 # binlog_checksum master_verify_checksum slave_sql_verify_checksum
 
-connection master;
-
+connection master_config;
 set @master_save_binlog_checksum= @@global.binlog_checksum;
-set @save_master_verify_checksum =  @@global.master_verify_checksum;
+set @save_master_verify_checksum= @@global.master_verify_checksum;
 
 select @@global.binlog_checksum as 'must be CRC32 because of the command line option';
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
@@ -39,7 +38,7 @@ select @@global.master_verify_checksum  as 'must be zero because of default';
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
 select @@session.master_verify_checksum  as 'no session var';
 
-connection slave;
+connection slave_config;
 
 set @slave_save_binlog_checksum= @@global.binlog_checksum;
 set @save_slave_sql_verify_checksum = @@global.slave_sql_verify_checksum;
@@ -48,7 +47,7 @@ select @@global.slave_sql_verify_checksum  as 'must be one because of default';
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
 select @@session.slave_sql_verify_checksum  as 'no session var';
 
-connection master;
+connection master_config;
 
 source include/show_binary_logs.inc;
 set @@global.binlog_checksum = NONE;
@@ -72,7 +71,7 @@ set @@global.binlog_checksum = ADLER32;
 --error ER_WRONG_VALUE_FOR_VAR
 set @@global.master_verify_checksum = 2; # the var is of bool type
 
-connection slave;
+connection slave_config;
 
 set @@global.slave_sql_verify_checksum = 0;
 set @@global.slave_sql_verify_checksum = default;
@@ -85,15 +84,18 @@ set @@global.slave_sql_verify_checksum = 2; # the var is of bool type
 # while master does not send a checksum-ed binlog the Old Slave can
 # work with the New Master
 
-connection master;
-
+connection master_config;
 set @@global.binlog_checksum = NONE;
+
+connection master;
 create table t1 (a int);
 
 # testing that binlog rotation preserves opt_binlog_checksum value
 flush logs;
 flush logs;
+connection master_config;
 -- source include/wait_for_binlog_checkpoint.inc
+connection master;
 flush logs;
 
 sync_slave_with_master;
@@ -103,16 +105,18 @@ flush logs;
 flush logs;
 select count(*) as zero from t1;
 
+connection slave_config;
 source include/stop_slave.inc;
 
-connection master;
+connection master_config;
 set @@global.binlog_checksum = CRC32;
 -- source include/wait_for_binlog_checkpoint.inc
+connection master;
 insert into t1 values (1) /* will not be applied on slave due to simulation */;
 
 # instruction to the dump thread
 
-connection slave;
+connection slave_config;
 set @saved_dbug = @@global.debug_dbug;
 set @@global.debug_dbug='d,simulate_slave_unaware_checksum';
 start slave;
@@ -120,11 +124,12 @@ start slave;
 --let $show_slave_io_error= 1
 source include/wait_for_slave_io_error.inc;
 
+connection slave;
 select count(*) as zero from t1;
 
 set @@global.debug_dbug = @saved_dbug;
 
-connection slave;
+connection slave_config;
 source include/start_slave.inc;
 
 # 
@@ -132,7 +137,7 @@ source include/start_slave.inc;
 #
 
 # C1. Failure by a client thread
-connection master;
+connection master_config;
 set @@global.master_verify_checksum = 1;
 set @save_dbug = @@session.debug_dbug;
 set @@session.debug_dbug='d,simulate_checksum_test_failure';
@@ -141,16 +146,17 @@ show binlog events;
 SET debug_dbug= @save_dbug;
 set @@global.master_verify_checksum = default;
 
-#connection master;
 sync_slave_with_master;
 
+connection slave_config;
 source include/stop_slave.inc;
 
 connection master;
 create table t2 (a int);
+connection master_config;
 let $pos_master= query_get_value(SHOW MASTER STATUS, Position, 1);
 
-connection slave;
+connection slave_config;
 
 # C2. Failure by IO thread
 # instruction to io thread
@@ -188,7 +194,6 @@ source include/wait_for_slave_sql_error.inc;
 set @@global.debug_dbug = @saved_dbug;
 source include/start_slave.inc;
 
-connection master;
 sync_slave_with_master;
 
 select count(*) as 'must be zero' from t2;
@@ -197,7 +202,7 @@ select count(*) as 'must be zero' from t2;
 # D. Reset slave, Change-Master, Binlog & Relay-log rotations with 
 #    random value on binlog_checksum on both master and slave
 #
-connection slave;
+connection slave_config;
 stop slave;
 --let $master_use_gtid_option= No
 --source include/reset_slave.inc
@@ -206,46 +211,51 @@ stop slave;
 set @@global.binlog_checksum= IF(floor((rand()*1000)%2), "CRC32", "NONE");
 flush logs;
 
-connection master;
+connection master_config;
 set @@global.binlog_checksum= CRC32;
 reset master;
 flush logs;
+connection master;
 create table t3 (a int, b char(5));
 
-connection slave;
+connection slave_config;
 source include/start_slave.inc;
 
-connection master;
 sync_slave_with_master;
 
 select count(*) as 'must be zero' from t3;
+
+connection slave_config;
 source include/stop_slave.inc;
 --replace_result $MASTER_MYPORT MASTER_PORT
 eval change master to master_host='127.0.0.1',master_port=$MASTER_MYPORT, master_user='root';
 
-connection master;
+connection master_config;
 flush logs;
 reset master;
+connection master;
 insert into t3 value (1, @@global.binlog_checksum);
 
-connection slave;
+connection slave_config;
 source include/start_slave.inc;
 flush logs;
 
-connection master;
 sync_slave_with_master;
 
 select count(*) as 'must be one' from t3;
 
-connection master;
+connection master_config;
 set @@global.binlog_checksum= IF(floor((rand()*1000)%2), "CRC32", "NONE");
+connection master;
 insert into t3 value (1, @@global.binlog_checksum);
+
 sync_slave_with_master;
 
 #clean-up
 
 connection master;
 drop table t1, t2, t3;
+connection master_config;
 set @@global.binlog_checksum = @master_save_binlog_checksum;
 set @@global.master_verify_checksum = @save_master_verify_checksum;
 
@@ -270,12 +280,12 @@ AAAAAAAAAAAAAAAAAAAx+apMEzgNAAgAEgAEBAQEEgAAVAAEGggAAAAICAgCAA==
 
 sync_slave_with_master;
 
-
 --echo *** Bug#59123 / MDEV-5799: INCIDENT_EVENT checksum written to error log as garbage characters ***
 
+--connection master_config
+--source include/wait_for_binlog_checkpoint.inc
 --connection master
 
---source include/wait_for_binlog_checkpoint.inc
 CREATE TABLE t4 (a INT PRIMARY KEY);
 INSERT INTO t4 VALUES (1);
 
@@ -290,7 +300,7 @@ SET debug_dbug= @old_dbug;
 
 INSERT INTO t4 VALUES (2);
 
---connection slave
+--connection slave_config
 --let $slave_sql_errno= 1590
 --source include/wait_for_slave_sql_error.inc
 
@@ -309,20 +319,20 @@ if(!$log_error_)
 --let SEARCH_PATTERN= Slave SQL: The incident LOST_EVENTS occurred on the master\. Message: error writing to the binary log, Internal MariaDB error code: 1590
 --source include/search_pattern_in_file.inc
 
+connection slave;
 SELECT * FROM t4 ORDER BY a;
+connection slave_config;
 STOP SLAVE IO_THREAD;
 SET sql_slave_skip_counter= 1;
 --source include/start_slave.inc
 
---connection master
 --save_master_pos
 
---connection slave
 --sync_with_master
+--connection slave
 SELECT * FROM t4 ORDER BY a;
 
-
---connection slave
+--connection slave_config
 set @@global.binlog_checksum = @slave_save_binlog_checksum;
 set @@global.slave_sql_verify_checksum = @save_slave_sql_verify_checksum;
 

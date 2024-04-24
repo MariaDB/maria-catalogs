@@ -3,17 +3,18 @@ include/master-slave.inc
 connection master;
 sync_slave_with_master;
 connection slave;
-connection slave;
+connection slave_config;
 stop slave;
 connection master;
 create table t1 (a int) engine=innodb;
 save_master_pos;
-connection slave;
+connection slave_config;
 reset slave;
 start slave;
 stop slave;
 start slave;
 sync_with_master;
+connection slave;
 select max(a) from t1;
 max(a)
 8000

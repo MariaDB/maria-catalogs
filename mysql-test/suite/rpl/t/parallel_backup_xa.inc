@@ -11,7 +11,7 @@ if ($slave_ooo_error)
 --echo #
 --echo # $kind XA $complete
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 
 --connection master
@@ -36,7 +36,7 @@ XA PREPARE '1';
 --eval XA $complete '1'
 --source include/save_master_gtid.inc
 
---connection slave
+--connection slave_config
 if ($slave_ooo_error)
 {
   SET @sav_innodb_lock_wait_timeout  = @@global.innodb_lock_wait_timeout;
@@ -66,7 +66,7 @@ XA RECOVER;
 --connection backup_slave
   --reap
   BACKUP STAGE END;
---connection slave
+--connection slave_config
 if (!$slave_ooo_error)
 {
   --source include/sync_with_master_gtid.inc

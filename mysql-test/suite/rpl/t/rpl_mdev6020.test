@@ -2,7 +2,12 @@
 --source include/have_partition.inc
 --source include/have_binlog_format_mixed_or_row.inc
 --source include/master-slave.inc
---connection slave
+
+# We cannot use catalogs here as we are using a external binlog that
+# uses the 'def' catalog.
+--source include/not_catalogs_or_def.inc
+
+--connection slave_config
 --source include/stop_slave.inc
 
 --connection master
@@ -19,7 +24,7 @@
 
 --source include/wait_until_connected_again.inc
 
---connection slave
+--connection slave_config
 SET SQL_LOG_BIN=0;
 ALTER TABLE mysql.gtid_slave_pos ENGINE = InnoDB;
 SET SQL_LOG_BIN=1;
@@ -31,23 +36,24 @@ SET GLOBAL slave_parallel_threads=12;
 eval CHANGE MASTER TO master_host='127.0.0.1', master_port=$SERVER_MYPORT_1, master_user='root', master_log_file='master-bin.000001', master_log_pos=4, master_use_gtid=no;
 --source include/start_slave.inc
 
---connection master
+--connection master_config
 SET SQL_LOG_BIN=0;
 ALTER TABLE mysql.gtid_slave_pos ENGINE = InnoDB;
 SET SQL_LOG_BIN=1;
---save_master_pos
 
---connection slave
---sync_with_master
+--sync_slave_with_master
 
 SELECT @@gtid_slave_pos;
 CHECKSUM TABLE table0_int_autoinc, table0_key_pk_parts_2_int_autoinc, table100_int_autoinc, table100_key_pk_parts_2_int_autoinc, table10_int_autoinc, table10_key_pk_parts_2_int_autoinc, table1_int_autoinc, table1_key_pk_parts_2_int_autoinc, table2_int_autoinc, table2_key_pk_parts_2_int_autoinc;
 
+--connection slave_config
 --source include/stop_slave.inc
 
 
+--connection slave_config
 SET GLOBAL default_storage_engine= @old_engine;
 SET GLOBAL slave_parallel_threads=@old_parallel;
+--connection slave
 SET sql_log_bin=0;
 DROP TABLE table0_int_autoinc;
 DROP TABLE table0_key_pk_parts_2_int_autoinc;
@@ -61,6 +67,7 @@ DROP TABLE table2_int_autoinc;
 DROP TABLE table2_key_pk_parts_2_int_autoinc;
 SET sql_log_bin=1;
 
+--connection slave_config
 --source include/start_slave.inc
 
 --connection master

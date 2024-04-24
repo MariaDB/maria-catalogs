@@ -1,11 +1,11 @@
 include/master-slave.inc
 [connection master]
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 connection master;
 include/rpl_stop_server.inc [server_number=1]
 include/rpl_start_server.inc [server_number=1]
-connection slave;
+connection slave_config;
 SET SQL_LOG_BIN=0;
 ALTER TABLE mysql.gtid_slave_pos ENGINE = InnoDB;
 SET SQL_LOG_BIN=1;
@@ -15,13 +15,12 @@ SET @old_parallel= @@GLOBAL.slave_parallel_threads;
 SET GLOBAL slave_parallel_threads=12;
 CHANGE MASTER TO master_host='127.0.0.1', master_port=SERVER_MYPORT_1, master_user='root', master_log_file='master-bin.000001', master_log_pos=4, master_use_gtid=no;
 include/start_slave.inc
-connection master;
+connection master_config;
 SET SQL_LOG_BIN=0;
 ALTER TABLE mysql.gtid_slave_pos ENGINE = InnoDB;
 SET SQL_LOG_BIN=1;
-save_master_pos;
+sync_slave_with_master;
 connection slave;
-sync_with_master;
 SELECT @@gtid_slave_pos;
 @@gtid_slave_pos
 0-1-1381
@@ -37,9 +36,12 @@ test.table1_int_autoinc	478809705
 test.table1_key_pk_parts_2_int_autoinc	3032208641
 test.table2_int_autoinc	854763867
 test.table2_key_pk_parts_2_int_autoinc	4231615291
+connection slave_config;
 include/stop_slave.inc
+connection slave_config;
 SET GLOBAL default_storage_engine= @old_engine;
 SET GLOBAL slave_parallel_threads=@old_parallel;
+connection slave;
 SET sql_log_bin=0;
 DROP TABLE table0_int_autoinc;
 DROP TABLE table0_key_pk_parts_2_int_autoinc;
@@ -52,6 +54,7 @@ DROP TABLE table1_key_pk_parts_2_int_autoinc;
 DROP TABLE table2_int_autoinc;
 DROP TABLE table2_key_pk_parts_2_int_autoinc;
 SET sql_log_bin=1;
+connection slave_config;
 include/start_slave.inc
 connection master;
 include/rpl_end.inc

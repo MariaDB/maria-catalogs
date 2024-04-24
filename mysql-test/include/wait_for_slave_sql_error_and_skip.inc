@@ -26,7 +26,7 @@
 #     If set, skip this number of events. If not set, skip one event.
 #
 #   $not_switch_connection
-#     By default, this script executes on the connection 'slave'.  If
+#     By default, this script executes on the connection 'slave_config'.  If
 #     $not_switch_connection is set, this script executes on the current
 #     connection.  In any case, the original connection is restored.
 #
@@ -49,7 +49,7 @@ if (!$rpl_debug)
 
 if (!$not_switch_connection)
 {
-  --let $rpl_connection_name= slave
+  --let $rpl_connection_name= slave_config
   --source include/rpl_connection.inc
 }
 

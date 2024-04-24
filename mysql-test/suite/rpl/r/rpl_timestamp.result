@@ -28,7 +28,7 @@ flush binary logs;
 /*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
 DELIMITER /*!*/;
 ROLLBACK/*!*/;
-/*!110600 USE CATALOG `def` *//*!*/;
+/*!110000 USE CATALOG `def` *//*!*/;
 use `test`/*!*/;
 SET TIMESTAMP=1656940000/*!*/;
 SET @@session.pseudo_thread_id=999999999/*!*/;

@@ -1,15 +1,16 @@
-include/rpl_init.inc [topology=1->2]
-connection server_1;
+include/master-slave.inc
+[connection master]
+connection master_config;
 FLUSH TABLES;
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
-connection server_2;
+connection slave_config;
 SET @save_slave_parallel_threads= @@GLOBAL.slave_parallel_threads;
 SET @save_slave_parallel_mode= @@GLOBAL.slave_parallel_mode;
 include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=2;
 SET GLOBAL slave_parallel_mode=optimistic;
 include/start_slave.inc
-connection server_1;
+connection master;
 CREATE TABLE t1(a INT) ENGINE=INNODB;
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
@@ -18,14 +19,13 @@ test.t1	optimize	status	OK
 INSERT INTO t1 VALUES(1);
 INSERT INTO t1  SELECT 1+a FROM t1;
 INSERT INTO t1  SELECT 2+a FROM t1;
-save_master_pos;
-connection server_2;
-sync_with_master;
+sync_slave_with_master;
+connection slave;
 #
 # Verify that following admin commands are marked as ddl
 # 'OPTIMIZE TABLE', 'REPAIR TABLE' and 'ANALYZE TABLE'
 #
-connection server_1;
+connection master;
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
@@ -46,14 +46,14 @@ FOUND 1 /GTID 0-1-10 ddl/ in mysqlbinlog.out
 #
 DROP TABLE t1;
 save_master_pos;
-connection server_2;
+connection slave;
 sync_with_master;
 FLUSH LOGS;
 #
 # Check that ALTER TABLE commands with ANALYZE, OPTIMIZE and REPAIR on
 # partitions will be marked as DDL in binary log.
 #
-connection server_1;
+connection master;
 CREATE TABLE t1(id INT) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (100),
 PARTITION pmax VALUES LESS THAN (MAXVALUE));
 INSERT INTO t1 VALUES (1), (10), (100), (1000);
@@ -75,10 +75,10 @@ FOUND 1 /GTID 0-1-16 ddl/ in mysqlbinlog.out
 # Clean up
 #
 DROP TABLE t1;
-save_master_pos;
-connection server_2;
-sync_with_master;
+sync_slave_with_master;
+connection slave;
 include/stop_slave.inc
+connection slave_config;
 SET GLOBAL slave_parallel_threads= @save_slave_parallel_threads;
 SET GLOBAL slave_parallel_mode= @save_slave_parallel_mode;
 include/start_slave.inc

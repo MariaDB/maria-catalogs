@@ -215,11 +215,11 @@ begin
 return unix_timestamp();
 end|
 ERROR HY000: You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
-connection master;
+connection master_config;
 set @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
 set global log_bin_trust_function_creators=0;
 set global log_bin_trust_function_creators=1;
-connection slave;
+connection slave_config;
 set @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
 set global log_bin_trust_function_creators=1;
 connection con1;
@@ -742,10 +742,11 @@ end
 master-bin.000001	#	Gtid	#	#	BEGIN GTID #-#-#
 master-bin.000001	#	Query	#	#	USE CATALOG `def`; use `mysqltest`; SELECT `mysqltest2`.`f1`()
 master-bin.000001	#	Query	#	#	COMMIT
-connection slave;
+connection slave_config;
+set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
+connection master_config;
 set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
 connection master;
-set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
 drop database mysqltest;
 drop database mysqltest2;
 sync_slave_with_master;
@@ -805,7 +806,7 @@ flush logs;
 /*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
 DELIMITER /*!*/;
 ROLLBACK/*!*/;
-/*!110600 USE CATALOG `def` *//*!*/;
+/*!110000 USE CATALOG `def` *//*!*/;
 SET TIMESTAMP=t/*!*/;
 SET @@session.pseudo_thread_id=999999999/*!*/;
 SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1, @@session.check_constraint_checks=1, @@session.sql_if_exists=0, @@session.explicit_defaults_for_timestamp=1, @@session.system_versioning_insert_history=0/*!*/;

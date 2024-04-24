@@ -7,6 +7,7 @@ call mtr.add_suppression("Write to binary log failed: Multi-statement transactio
 call mtr.add_suppression("Incident event write to the binary log file failed");
 call mtr.add_suppression("handlerton rollback failed");
 "*********** Annotate Event write failure **************"
+connection master_config;
 SET GLOBAL max_binlog_cache_size = 4096;
 SET GLOBAL binlog_cache_size = 4096;
 SET GLOBAL max_binlog_stmt_cache_size = 4096;
@@ -38,7 +39,7 @@ ERROR HY000: Multi-statement transaction required more than 'max_binlog_cache_si
 # Validating that only the first insert into t2 saved..
 # ..success
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 # Validating the first insert into t2 replicated to slave..
 include/diff_tables.inc [master:test.t2,slave:test.t2]
@@ -46,7 +47,7 @@ include/diff_tables.inc [master:test.t2,slave:test.t2]
 "#######################################################################"
 "# Test Case3: Annotate event write failure for mixed engine UPDATE    #"
 "#######################################################################"
-connection master;
+connection master_config;
 ERROR HY000: Multi-row statements required more than 'max_binlog_stmt_cache_size' bytes of storage.
 # Validating update was not binlogged..
 # ..success
@@ -59,12 +60,13 @@ connection slave;
 include/wait_for_slave_sql_error_and_skip.inc [errno=1590]
 # Validating the rolled-back multi-engine update did not replicate to slave at all..
 # ..success
-connection master;
+connection master_config;
 "****** Clean up *******"
 SET GLOBAL max_binlog_cache_size= ORIGINAL_VALUE;
 SET GLOBAL binlog_cache_size= ORIGINAL_VALUE;
 SET GLOBAL max_binlog_stmt_cache_size= ORIGINAL_VALUE;
 SET GLOBAL binlog_stmt_cache_size= ORIGINAL_VALUE;
+connection master;
 DROP TABLE t1,t2;
 "*********** TABLE MAP Event write failure **************"
 CREATE TABLE tm (f INT) ENGINE=MYISAM;
@@ -77,6 +79,7 @@ connection slave;
 "# Test Case4: Table_map event write failure for trans engine UPDATE   #"
 "#######################################################################"
 # Transaction should be rolled back without writing incident event
+connection master_config;
 connection master;
 SET debug_dbug="+d,table_map_write_error";
 UPDATE ti, tm set ti.f=30;
@@ -86,13 +89,14 @@ ERROR HY000: Multi-statement transaction required more than 'max_binlog_cache_si
 # Validating update was rolled back from storage engines..
 # ..success
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 "#######################################################################"
 "# Test Case5: Table_map event write failure for mixed engine UPDATE   #"
 "#######################################################################"
-connection master;
+connection master_config;
 # In case of mixed engines if non trans table is updated write INCIDENT event
+connection master;
 UPDATE ti,tm SET tm.f=88, ti.f=120;
 ERROR HY000: Multi-statement transaction required more than 'max_binlog_cache_size' bytes of storage; increase this mariadbd variable and try again
 # Validating update was not binlogged..
@@ -110,6 +114,7 @@ include/wait_for_slave_sql_error_and_skip.inc [errno=1590]
 "# with a table_map event write failure on the second event should
 "# roll-back only the second update without incident
 "#######################################################################"
+connection master_config;
 connection master;
 SET debug_dbug="";
 BEGIN;
@@ -124,9 +129,9 @@ COMMIT;
 # ..and that the second update did not save..
 # ..success
 # Validating that only the first update replicated to slave without incident
-connection master;
+connection master_config;
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 include/diff_tables.inc [master:test.ti,slave:test.ti]
 "#######################################################################"
@@ -136,6 +141,7 @@ include/diff_tables.inc [master:test.ti,slave:test.ti]
 "# with a table_map event write failure on the second event should
 "# roll-back both updates without incident
 "#######################################################################"
+connection master_config;
 connection master;
 SET debug_dbug="";
 BEGIN;
@@ -149,9 +155,9 @@ ROLLBACK;
 # Validating that neither update saved on master..
 # ..success
 # Validating the transaction did not replicate to the slave
-connection master;
+connection master_config;
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 include/diff_tables.inc [master:test.ti,slave:test.ti]
 "#######################################################################"
@@ -161,6 +167,7 @@ include/diff_tables.inc [master:test.ti,slave:test.ti]
 "# with a table_map event write failure on the second event should
 "# roll-back only the second update with incident
 "#######################################################################"
+connection master_config;
 connection master;
 BEGIN;
 SET debug_dbug="";
@@ -189,6 +196,7 @@ include/wait_for_slave_sql_error_and_skip.inc [errno=1590]
 "# roll-back both transactional updates, preserve the non-transactional
 "# update on the master (only), and write an incident event
 "#######################################################################"
+connection master_config;
 connection master;
 SET debug_dbug="";
 BEGIN;

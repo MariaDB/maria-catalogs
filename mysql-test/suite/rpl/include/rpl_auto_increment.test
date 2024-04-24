@@ -216,8 +216,7 @@ DROP TABLE t2;
 sync_slave_with_master;
 
 connection master;
-let $MYSQLD_DATADIR= `SELECT @@DATADIR`;
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 | $MYSQL test
+--exec $MYSQL_BINLOG $MASTER_TOPDIR/master-bin.000001 | $MYSQL test
 sync_slave_with_master;
 
 let $diff_tables= master:t1, slave:t1;
@@ -267,7 +266,7 @@ connection master;
 CREATE TABLE t_ignored2(id INT AUTO_INCREMENT PRIMARY KEY) ENGINE=myisam;
 sync_slave_with_master;
 
-connection slave;
+connection slave_config;
 STOP SLAVE;
 # Ignore the next INSERT into t_ignored2 and the INSERT_ID event just before it.
 SET GLOBAL sql_slave_skip_counter = 2;

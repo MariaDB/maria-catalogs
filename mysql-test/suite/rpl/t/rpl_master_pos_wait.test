@@ -30,7 +30,7 @@ select master_pos_wait('foo', 98);
 
 --echo *** MDEV-7130: MASTER_POS_WAIT(log_name,log_pos,timeout,"connection_name") hangs, does not respect the timeout ***
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 reset slave all;
 --replace_result $MASTER_MYPORT MASTER_MYPORT

@@ -25,7 +25,7 @@ select master_pos_wait('foo', 98);
 master_pos_wait('foo', 98)
 NULL
 *** MDEV-7130: MASTER_POS_WAIT(log_name,log_pos,timeout,"connection_name") hangs, does not respect the timeout ***
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 reset slave all;
 change master 'my_slave' to master_port=MASTER_MYPORT, master_host='127.0.0.1', master_user='root';

@@ -20,7 +20,7 @@ create table t2 (a timestamp);
 
 --exec $MYSQL_BINLOG --short-form $MARIADB_TOPDIR/master-bin.000001
 
---connection slave
+--connection slave_config
 
 set global explicit_defaults_for_timestamp=0;
 --let $master_use_gtid_option= No

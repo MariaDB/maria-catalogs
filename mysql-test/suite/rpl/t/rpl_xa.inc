@@ -44,7 +44,7 @@ xa end 's';
 xa prepare 's';
 --source include/save_master_gtid.inc
 
-connection slave;
+connection slave_config;
 source include/sync_with_master_gtid.inc;
 if ($rpl_xa_check)
 {
@@ -71,16 +71,17 @@ let $diff_tables= master:t2, slave:t2;
 source include/diff_tables.inc;
 
 #
-# Read-only XA remains prepared after disconnect and must rollback at XA-complete
-# after recoonect. To the read-only also belongs non-transactional engine XA.
+# Read-only XA remains prepared after disconnect and must rollback at
+# XA-complete after reconnect.
+# To the read-only also belongs non-transactional engine XA.
 #
---connection master
-
+--connection master_config
 --echo *** At the start of read-only section gtid list is:
 flush logs;
 --let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
 --source include/show_gtid_list.inc
 
+--connection master
 
 set @query1="select 1";
 set @query2="select count(*) into @s2 from t1";
@@ -147,18 +148,18 @@ while ($p_trx)
 --echo *** Zero prepared xa:s must be in the list:
 xa recover;
 
+--connection master_config
 --echo *** At the end of read-only section gtid list has 0 more compare with previous check:
 flush logs;
 --let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
 --source include/show_gtid_list.inc
-
 
 #
 # XA logging cases while some of XA resources are read-only
 #
 # A1. Binlog filter
 
-
+--connection master
 --let $db=test_ign
 --eval create database $db
 set @@sql_log_bin = 0;
@@ -189,6 +190,7 @@ xa recover;
 # restore for the following tests
 --let $db=test
 
+--connection master_config
 --echo *** At the end of --binlog-ignore-db section gtid list has 2 more:
 flush logs;
 --let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
@@ -256,11 +258,13 @@ xa recover;
 --connection master
 xa recover;
 
+--connection master_config
 --echo *** At the end of ineffective in engine section gtid list has 5 more:
 flush logs;
 --let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
 --source include/show_gtid_list.inc
 
+--connection master
 #
 # A3 MyISAM "xa" logs empty XA-prepare group, followed by
 #     an XA-complete event
@@ -302,6 +306,7 @@ xa recover;
 --echo *** Zero prepared xa:s must be in the list:
 xa recover;
 
+--connection master_config
 --echo *** At the end of MyISAM "xa" section gtid list has 7 more compare with previous check:
 flush logs;
 --let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
@@ -338,6 +343,7 @@ set @@session.sql_log_bin = ON;
 --connection master
 xa recover;
 
+--connection master_config
 --echo *** At the end of skip_log_binb section gtid list has 0 more:
 flush logs;
 --let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)

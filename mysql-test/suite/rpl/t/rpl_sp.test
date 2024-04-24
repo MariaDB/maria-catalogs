@@ -4,6 +4,7 @@
 # Modified by WL#2971.
 
 source include/have_binlog_format_mixed.inc;
+source include/not_catalogs_or_def.inc;
 source include/master-slave.inc;
 
 set local sql_mode='';
@@ -237,12 +238,12 @@ begin
        return unix_timestamp();
 end|
 delimiter ;|
-connection master;
+connection master_config;
 set @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
 set global log_bin_trust_function_creators=0;
 set global log_bin_trust_function_creators=1;
 # slave needs it too otherwise will not execute what master allowed:
-connection slave;
+connection slave_config;
 set @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
 set global log_bin_trust_function_creators=1;
 
@@ -553,11 +554,12 @@ connection master;
 # Restore log_bin_trust_function_creators to its original value.
 # This is a cleanup for all parts above where we tested stored
 # functions and triggers.
-connection slave;
+connection slave_config;
 set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
-connection master;
+connection master_config;
 set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
 
+connection master;
 # Clean up
 drop database mysqltest;
 drop database mysqltest2;

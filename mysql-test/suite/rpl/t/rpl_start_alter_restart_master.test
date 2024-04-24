@@ -9,12 +9,11 @@
 --source include/have_debug.inc
 --source include/no_valgrind_without_big.inc
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 CHANGE MASTER TO MASTER_USE_GTID=NO;
 --source include/start_slave.inc
 
---connection slave
 SET @old_debug_slave= @@global.debug;
 stop slave;
 --let $gtid_strict_mode= `select @@gtid_strict_mode`
@@ -35,8 +34,8 @@ create table t3( a int primary key, b int) engine=innodb;
 
 --connection master
 --sync_slave_with_master
+--connection slave_config
 --source include/stop_slave.inc
-
 
 --connection master
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -49,17 +48,19 @@ alter table t3 add column d int;
 set binlog_alter_two_phase= true;
 alter table t3 add column d int;
 show create table t3;
+--connection master_config
 --source include/show_binlog_events.inc
 --let $binlog_file=master-bin.000002
 --source include/show_binlog_events.inc
 --let $binlog_file=
 
---connection slave
+--connection slave_config
 --source include/start_slave.inc
 
---connection master
 --sync_slave_with_master
+--connection slave_config
 --source include/show_binlog_events.inc
+--connection slave
 show create table t3;
 
 
@@ -69,6 +70,7 @@ drop table t3;
 --eval set global binlog_alter_two_phase = $binlog_alter_two_phase
 
 --sync_slave_with_master
+--connection slave_config
 SET GLOBAL debug_dbug= @old_debug_slave;
 stop slave;
 --eval set global slave_parallel_threads = $slave_parallel_threads;

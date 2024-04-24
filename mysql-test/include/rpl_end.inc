@@ -53,6 +53,15 @@ if (!$rpl_inited)
   --die ERROR IN TEST: rpl_end.inc was sourced when replication was not configured. Most likely, rpl_end.inc was sourced twice or rpl_init.inc has not been sourced.
 }
 
+# Check if we are using master-slave.inc
+
+connection_exists slave_config;
+if ($error > 0)
+{
+  # We are not using master-slave, use current connection in stop_slave.inc
+  let $use_current_connection=1;
+}
+
 
 if ($rpl_debug)
 {
@@ -67,6 +76,7 @@ while ($_rpl_server)
 
   # Only check slave threads for error on hosts that were at some
   # point configured as slave.
+  --enable_reconnect
   --let $_tmp= query_get_value(SHOW SLAVE STATUS, Master_Host, 1)
   if ($_tmp != 'No such row')
   {

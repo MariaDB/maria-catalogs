@@ -16,6 +16,7 @@
 # [--let $rpl_only_running_threads= 1]
 # [--let $slave_timeout= NUMBER]
 # [--let $rpl_debug= 1]
+# [--let $use_current_connection= 1]
 # --source include/stop_slave.inc
 #
 # Parameters:
@@ -37,6 +38,12 @@
 --let $include_filename= stop_slave.inc
 --source include/begin_include_file.inc
 
+if (!$use_current_connection)
+{
+--disable_connect_log
+--connection slave_config
+--enable_connect_log
+}
 
 if (!$rpl_debug)
 {
@@ -82,7 +89,6 @@ if (!$rpl_only_running_threads)
   STOP SLAVE;
   --source include/wait_for_slave_to_stop.inc
 }
-
 
 --let $include_filename= stop_slave.inc
 --source include/end_include_file.inc

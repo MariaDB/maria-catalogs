@@ -19,14 +19,13 @@
 #
 --source include/have_partition.inc
 --source include/have_innodb.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
---connection server_1
+--connection master_config
 FLUSH TABLES;
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
 
---connection server_2
+--connection slave_config
 SET @save_slave_parallel_threads= @@GLOBAL.slave_parallel_threads;
 SET @save_slave_parallel_mode= @@GLOBAL.slave_parallel_mode;
 --source include/stop_slave.inc
@@ -34,22 +33,20 @@ SET GLOBAL slave_parallel_threads=2;
 SET GLOBAL slave_parallel_mode=optimistic;
 --source include/start_slave.inc
 
---connection server_1
+--connection master
 CREATE TABLE t1(a INT) ENGINE=INNODB;
 OPTIMIZE TABLE t1;
 INSERT INTO t1 VALUES(1);
 INSERT INTO t1  SELECT 1+a FROM t1;
 INSERT INTO t1  SELECT 2+a FROM t1;
---save_master_pos
-
---connection server_2
---sync_with_master
+--sync_slave_with_master
 
 --echo #
 --echo # Verify that following admin commands are marked as ddl
 --echo # 'OPTIMIZE TABLE', 'REPAIR TABLE' and 'ANALYZE TABLE'
 --echo #
---connection server_1
+
+--connection master
 
 OPTIMIZE TABLE t1;
 --let optimize_gtid= `SELECT @@GLOBAL.gtid_binlog_pos`
@@ -84,7 +81,7 @@ DROP TABLE t1;
 --remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.out
 --save_master_pos
 
---connection server_2
+--connection slave
 --sync_with_master
 FLUSH LOGS;
 
@@ -92,7 +89,7 @@ FLUSH LOGS;
 --echo # Check that ALTER TABLE commands with ANALYZE, OPTIMIZE and REPAIR on
 --echo # partitions will be marked as DDL in binary log.
 --echo #
---connection server_1
+--connection master
 CREATE TABLE t1(id INT) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (100),
  PARTITION pmax VALUES LESS THAN (MAXVALUE));
 INSERT INTO t1 VALUES (1), (10), (100), (1000);
@@ -128,12 +125,11 @@ FLUSH LOGS;
 --echo #
 DROP TABLE t1;
 --remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.out
---save_master_pos
 
---connection server_2
---sync_with_master
+--sync_slave_with_master
 
 --source include/stop_slave.inc
+--connection slave_config
 SET GLOBAL slave_parallel_threads= @save_slave_parallel_threads;
 SET GLOBAL slave_parallel_mode= @save_slave_parallel_mode;
 --source include/start_slave.inc

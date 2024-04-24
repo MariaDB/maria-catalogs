@@ -297,8 +297,10 @@ SET @@global.debug_dbug="d,fault_injection_registering_index";
 FLUSH LOGS;
 SET @@global.debug_dbug=@old_debug;
 
+--connection master_config
 -- error ER_NO_BINARY_LOGGING
 SHOW BINARY LOGS;
+--connection master
 
 # issue some statements and check that they don't fail
 CREATE TABLE t5 (a INT);
@@ -385,7 +387,7 @@ RESET MASTER;
 
 ### setup
 --source include/rpl_reset.inc
--- connection slave
+-- connection slave_config
 
 # Slave tests rely on logic of non-gtid mode
 --source include/stop_slave.inc
@@ -394,6 +396,7 @@ CHANGE MASTER TO MASTER_USE_GTID=NO;
 
 # slave suppressions
 
+--connection slave
 call mtr.add_suppression("Slave I/O: Relay log write failure: could not queue event from master.*");
 call mtr.add_suppression("Error writing file .*");
 call mtr.add_suppression("Could not use .*");
@@ -401,6 +404,7 @@ call mtr.add_suppression("MYSQL_BIN_LOG::open failed to sync the index file.");
 call mtr.add_suppression("Can't generate a unique log-filename .*");
 -- echo ###################### TEST #13
 
+--connection slave_config
 #### ASSERTION: check against unique log filename error
 -- let $io_thd_injection_fault_flag= error_unique_log_filename
 -- let $slave_io_errno= 1595

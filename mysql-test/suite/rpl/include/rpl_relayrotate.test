@@ -12,7 +12,7 @@
 # before we stop it. If not, we get errors about UNIX_TIMESTAMP() in the log.
 connection master;
 sync_slave_with_master;
-connection slave;
+connection slave_config;
 stop slave;
 connection master;
 --disable_warnings
@@ -32,7 +32,7 @@ commit;
 # which corresponds to 30 slave's relay logs.
 enable_query_log;
 save_master_pos;
-connection slave;
+connection slave_config;
 reset slave;
 start slave;
 # We wait 1 sec for the SQL thread to be somewhere in
@@ -56,6 +56,7 @@ start slave;
 # We must wait for the transaction to commit before
 # reading, with a sync_with_master.
 sync_with_master;
+connection slave;
 select max(a) from t1;
 connection master;
 

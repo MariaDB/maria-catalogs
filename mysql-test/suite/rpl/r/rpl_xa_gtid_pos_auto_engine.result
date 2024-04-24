@@ -2,6 +2,7 @@ include/master-slave.inc
 [connection master]
 connection slave;
 call mtr.add_suppression("The automatically created table.*name may not be entirely in lowercase");
+connection slave_config;
 include/stop_slave.inc
 CHANGE MASTER TO master_use_gtid=slave_pos;
 SET @@global.gtid_pos_auto_engines="innodb";
@@ -38,7 +39,7 @@ insert into t2 values (0);
 xa end 's';
 xa prepare 's';
 include/save_master_gtid.inc
-connection slave;
+connection slave_config;
 include/sync_with_master_gtid.inc
 SELECT @@global.gtid_slave_pos = CONCAT(domain_id,"-",server_id,"-",seq_no) FROM mysql.gtid_slave_pos WHERE seq_no = (SELECT DISTINCT max(seq_no) FROM mysql.gtid_slave_pos);
 @@global.gtid_slave_pos = CONCAT(domain_id,"-",server_id,"-",seq_no)
@@ -55,12 +56,13 @@ sync_slave_with_master;
 connection slave;
 include/diff_tables.inc [master:t1, slave:t1]
 include/diff_tables.inc [master:t2, slave:t2]
-connection master;
+connection master_config;
 *** At the start of read-only section gtid list is:
 flush logs;
 show binlog events in 'master-bin.000002' limit 1,1;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 master-bin.000002	#	Gtid_list	1	#	[0-1-11]
+connection master;
 set @query1="select 1";
 set @query2="select count(*) into @s2 from t1";
 connection master;
@@ -104,11 +106,13 @@ formatID	gtrid_length	bqual_length	data
 *** Zero prepared xa:s must be in the list:
 xa recover;
 formatID	gtrid_length	bqual_length	data
+connection master_config;
 *** At the end of read-only section gtid list has 0 more compare with previous check:
 flush logs;
 show binlog events in 'master-bin.000003' limit 1,1;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 master-bin.000003	#	Gtid_list	1	#	[0-1-11]
+connection master;
 create database test_ign;
 set @@sql_log_bin = 0;
 create table test_ign.t (a int) engine=InnoDB;
@@ -128,6 +132,7 @@ formatID	gtrid_length	bqual_length	data
 connection master;
 xa recover;
 formatID	gtrid_length	bqual_length	data
+connection master_config;
 *** At the end of --binlog-ignore-db section gtid list has 2 more:
 flush logs;
 show binlog events in 'master-bin.000004' limit 1,1;
@@ -168,11 +173,13 @@ disconnect master_rw_binlog_only;
 connection master;
 xa recover;
 formatID	gtrid_length	bqual_length	data
+connection master_config;
 *** At the end of ineffective in engine section gtid list has 5 more:
 flush logs;
 show binlog events in 'master-bin.000005' limit 1,1;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 master-bin.000005	#	Gtid_list	1	#	[0-1-18]
+connection master;
 create table tm (a int) engine=myisam;
 connection master;
 connect  master_$xid, 127.0.0.1,root,,$db,$MASTER_MYPORT,;
@@ -196,6 +203,7 @@ formatID	gtrid_length	bqual_length	data
 *** Zero prepared xa:s must be in the list:
 xa recover;
 formatID	gtrid_length	bqual_length	data
+connection master_config;
 *** At the end of MyISAM "xa" section gtid list has 7 more compare with previous check:
 flush logs;
 show binlog events in 'master-bin.000006' limit 1,1;
@@ -221,6 +229,7 @@ include/save_master_gtid.inc
 connection master;
 xa recover;
 formatID	gtrid_length	bqual_length	data
+connection master_config;
 *** At the end of skip_log_binb section gtid list has 0 more:
 flush logs;
 show binlog events in 'master-bin.000007' limit 1,1;
@@ -294,7 +303,7 @@ disconnect con1;
 connection master;
 xa commit '1';
 drop table t2, t1;
-connection slave;
+connection slave_config;
 include/stop_slave.inc
 SET @@global.gtid_pos_auto_engines="";
 SET @@session.sql_log_bin=0;

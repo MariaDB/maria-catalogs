@@ -1,6 +1,8 @@
-include/rpl_init.inc [topology=1->2]
-connection server_2;
+include/master-slave.inc
+[connection master]
+connection slave;
 call mtr.add_suppression("The automatically created table.*name may not be entirely in lowercase");
+connection slave_config;
 SET GLOBAL gtid_pos_auto_engines="innodb";
 ERROR HY000: This operation cannot be performed as you have a running slave ''; run STOP SLAVE '' first
 include/stop_slave.inc
@@ -37,19 +39,19 @@ SELECT @@gtid_pos_auto_engines;
 @@gtid_pos_auto_engines
 
 include/start_slave.inc
-connection server_1;
+connection master;
 CREATE TABLE t1 (a INT PRIMARY KEY);
 INSERT INTO t1 VALUES (1);
 SELECT * FROM t1 ORDER BY a;
 a
 1
-save_master_pos;
-connection server_2;
-sync_with_master;
+sync_slave_with_master;
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
 include/stop_slave.inc
+connection slave_config;
 SET sql_log_bin=0;
 ALTER TABLE mysql.gtid_slave_pos ENGINE=Aria;
 CREATE TABLE mysql.gtid_slave_pos_innodb LIKE mysql.gtid_slave_pos;
@@ -57,7 +59,7 @@ ALTER TABLE mysql.gtid_slave_pos_innodb ENGINE=InnoDB;
 INSERT INTO mysql.gtid_slave_pos_innodb SELECT * FROM mysql.gtid_slave_pos;
 TRUNCATE mysql.gtid_slave_pos;
 SET sql_log_bin=1;
-connection server_1;
+connection master;
 INSERT INTO t1 VALUES (2);
 INSERT INTO t1 VALUES (3);
 SELECT * FROM t1 ORDER BY a;
@@ -67,14 +69,17 @@ a
 3
 include/save_master_gtid.inc
 *** Restart server with --gtid-pos-auto-engines=innodb,myisam ***
-connection server_2;
+# Ensure that all connections to slave are active again
+connection slave_config;
 include/sync_with_master_gtid.inc
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
 2
 3
 *** Verify no new gtid_slave_pos* tables are created ***
+connection slave_config;
 SELECT table_name, engine FROM information_schema.tables
 WHERE table_schema='mysql' AND table_name LIKE 'gtid_slave_pos%'
  ORDER BY table_name;
@@ -84,13 +89,14 @@ gtid_slave_pos_innodb	InnoDB
 SELECT @@gtid_pos_auto_engines;
 @@gtid_pos_auto_engines
 InnoDB,MyISAM
+connection slave_config;
 include/stop_slave.inc
 SET sql_log_bin=0;
 INSERT INTO mysql.gtid_slave_pos_innodb SELECT * FROM mysql.gtid_slave_pos;
 DROP TABLE mysql.gtid_slave_pos;
 RENAME TABLE mysql.gtid_slave_pos_innodb TO mysql.gtid_slave_pos;
 SET sql_log_bin=1;
-connection server_1;
+connection master;
 CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (4);
 INSERT INTO t2 VALUES (1);
@@ -105,8 +111,10 @@ a
 1
 include/save_master_gtid.inc
 *** Restart server with --gtid-pos-auto-engines=myisam,innodb ***
-connection server_2;
+# Ensure that all connections to slave are active again
+connection slave_config;
 include/sync_with_master_gtid.inc
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
@@ -117,6 +125,7 @@ SELECT * FROM t2 ORDER BY a;
 a
 1
 *** Verify that no new gtid_slave_pos* tables are auto-created ***
+connection slave_config;
 SELECT table_name, engine FROM information_schema.tables
 WHERE table_schema='mysql' AND table_name LIKE 'gtid_slave_pos%'
  ORDER BY table_name;
@@ -126,7 +135,7 @@ include/stop_slave.inc
 SET sql_log_bin=0;
 ALTER TABLE mysql.gtid_slave_pos ENGINE=Aria;
 SET sql_log_bin=1;
-connection server_1;
+connection master;
 INSERT INTO t1 VALUES (5);
 INSERT INTO t2 VALUES (2);
 SELECT * FROM t1 ORDER BY a;
@@ -141,8 +150,10 @@ a
 1
 2
 include/save_master_gtid.inc
-connection server_2;
+# Ensure that all connections to slave are active again
+connection slave_config;
 include/sync_with_master_gtid.inc
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
@@ -155,18 +166,20 @@ a
 1
 2
 *** Verify that mysql.gtid_slave_pos_InnoDB is auto-created ***
+connection slave_config;
 SELECT lower(table_name), engine FROM information_schema.tables
 WHERE table_schema='mysql' AND table_name LIKE 'gtid_slave_pos%'
  ORDER BY table_name;
 lower(table_name)	engine
 gtid_slave_pos	Aria
 gtid_slave_pos_innodb	InnoDB
+connection slave_config;
 include/stop_slave.inc
 SET sql_log_bin=0;
 INSERT INTO mysql.gtid_slave_pos SELECT * FROM mysql.gtid_slave_pos_InnoDB;
 DROP TABLE mysql.gtid_slave_pos_InnoDB;
 SET sql_log_bin=1;
-connection server_1;
+connection master;
 INSERT INTO t1 VALUES (6);
 INSERT INTO t2 VALUES (3);
 SELECT * FROM t1 ORDER BY a;
@@ -184,8 +197,10 @@ a
 3
 include/save_master_gtid.inc
 *** Restart server without --gtid-pos-auto-engines ***
-connection server_2;
+# Ensure that all connections to slave are active again
+connection slave_config;
 include/sync_with_master_gtid.inc
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
@@ -200,6 +215,7 @@ a
 2
 3
 *** Verify that no mysql.gtid_slave_pos* table is auto-created ***
+connection slave_config;
 SELECT table_name, engine FROM information_schema.tables
 WHERE table_schema='mysql' AND table_name LIKE 'gtid_slave_pos%'
  ORDER BY table_name;
@@ -211,7 +227,7 @@ domain_id	max(seq_no)
 include/stop_slave.inc
 SET GLOBAL gtid_pos_auto_engines="innodb";
 include/start_slave.inc
-connection server_1;
+connection master;
 INSERT INTO t1 VALUES (7);
 INSERT INTO t2 VALUES (4);
 SELECT * FROM t1 ORDER BY a;
@@ -230,8 +246,9 @@ a
 3
 4
 include/save_master_gtid.inc
-connection server_2;
+connection slave_config;
 include/sync_with_master_gtid.inc
+connection slave;
 SELECT * FROM t1 ORDER BY a;
 a
 1
@@ -248,6 +265,7 @@ a
 3
 4
 *** Verify that mysql.gtid_slave_pos_InnoDB is auto-created ***
+connection slave_config;
 SELECT lower(table_name), engine FROM information_schema.tables
 WHERE table_schema='mysql' AND table_name LIKE 'gtid_slave_pos%'
  ORDER BY table_name;
@@ -257,14 +275,15 @@ gtid_slave_pos_innodb	InnoDB
 SELECT domain_id, max(seq_no) FROM mysql.gtid_slave_pos GROUP BY domain_id;
 domain_id	max(seq_no)
 0	13
-connection server_2;
+connection slave_config;
 *** Restart the slave server to prove 'gtid_slave_pos_innodb' autodiscovery ***
-connection server_2;
+# Ensure that all connections to slave are active again
+connection slave_config;
 SELECT max(seq_no) FROM mysql.gtid_slave_pos_InnoDB into @seq_no;
-connection server_1;
+connection master;
 INSERT INTO t2(a) SELECT 1+MAX(a) FROM t2;
 include/save_master_gtid.inc
-connection server_2;
+connection slave_config;
 include/sync_with_master_gtid.inc
 include/stop_slave.inc
 SET GLOBAL gtid_pos_auto_engines="";
@@ -272,6 +291,6 @@ SET sql_log_bin=0;
 DROP TABLE mysql.gtid_slave_pos_InnoDB;
 SET sql_log_bin=1;
 include/start_slave.inc
-connection server_1;
+connection master;
 DROP TABLE t1, t2;
 include/rpl_end.inc

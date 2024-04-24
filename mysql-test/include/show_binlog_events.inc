@@ -8,6 +8,7 @@
 # [--let $binlog_start= <POSITION> ]
 # [--let $binlog_limit= 1, 3 ]
 # [--let $skip_checkpoint_events= 1]
+# [--let $use_current_connection= 1]
 # --source include/show_binlog_events.inc
 #
 # Parameters:
@@ -29,6 +30,20 @@
 
 --let $include_filename= show_binlog_events.inc
 --source include/begin_include_file.inc
+
+if (!$use_current_connection)
+{
+--disable_connect_log
+  if ($CURRENT_CONNECTION == "master")
+  {
+    --connection master_config
+  }
+  if ($CURRENT_CONNECTION == "slave")
+  {
+    --connection slave_config
+  }
+--enable_connect_log
+}
 
 --let $is_relay_log= 0
 --source include/show_events.inc

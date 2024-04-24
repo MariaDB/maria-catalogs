@@ -1,37 +1,34 @@
 --source include/have_innodb.inc
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
---let $rpl_topology=1->2
---source include/rpl_init.inc
+--source include/master-slave.inc
 
---connection server_2
+--connection slave_config
 SET @old_parallel_threads=@@GLOBAL.slave_parallel_threads;
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads=10;
 
 ##### Case 0 : When both DO_DOMAIN_IDS and IGNORE_DOMAIN_IDS are empty.
 
---connection server_2
 CHANGE MASTER TO master_use_gtid=slave_pos, DO_DOMAIN_IDS=(), IGNORE_DOMAIN_IDS=();
 --source include/start_slave.inc
 
---connection server_1
+--connection master_config
 SELECT @@session.gtid_domain_id;
 ALTER TABLE mysql.gtid_slave_pos ENGINE=InnoDB;
+--connection master
 CREATE TABLE t1 (a int PRIMARY KEY) ENGINE=MyISAM;
 CREATE TABLE t2 (a int PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
---save_master_pos
 
---connection server_2
---sync_with_master
+--sync_slave_with_master
 
 # Block the table t1 to simulate a replicated query taking a long time.
 --connect (con_temp1,127.0.0.1,root,,test,$SERVER_MYPORT_2,)
 LOCK TABLE t1 WRITE;
 
---connection server_1
+--connection master
 SET @@session.gtid_domain_id=1;
 # This query will be blocked on the slave until UNLOCK TABLES.
 INSERT INTO t1 VALUES (2);
@@ -46,7 +43,7 @@ INSERT INTO t2 VALUES (5);
 COMMIT;
 INSERT INTO t2 VALUES (6);
 
---connection server_2
+--connection slave
 --let $wait_condition= SELECT COUNT(*) = 6 FROM t2
 --source include/wait_condition.inc
 
@@ -56,7 +53,7 @@ SELECT * FROM t2 ORDER by a;
 SELECT * FROM t1;
 UNLOCK TABLES;
 
---connection server_2
+--connection slave
 --let $wait_condition= SELECT COUNT(*) = 2 FROM t1
 --source include/wait_condition.inc
 
@@ -64,7 +61,7 @@ SELECT * FROM t1 ORDER BY a;
 
 ##### Case 1 : When DO_DOMAIN_IDS=(1)
 
---connection server_2
+--connection slave_config
 --source include/stop_slave.inc
 let $do_domain_ids_before= query_get_value(SHOW SLAVE STATUS, Replicate_Do_Domain_Ids, 1);
 let $ignore_domain_ids_before= query_get_value(SHOW SLAVE STATUS, Replicate_Ignore_Domain_Ids, 1);
@@ -81,14 +78,14 @@ let $ignore_domain_ids_after= query_get_value(SHOW SLAVE STATUS, Replicate_Ignor
 --echo DO_DOMAIN_IDS (AFTER)     : $do_domain_ids_after
 --echo IGNORE_DOMAIN_IDS (AFTER) : $ignore_domain_ids_after
 
---connection server_2
+--connection slave
 --sync_with_master
 
 # Block the table t1 to simulate a replicated query taking a long time.
 --connection con_temp1
 LOCK TABLE t1 WRITE;
 
---connection server_1
+--connection master
 SET @@session.gtid_domain_id=0;
 # This query will be blocked on the slave until UNLOCK TABLES.
 # But, since DO_DOMAIN_IDS=(1), it will be filtered out on slave.
@@ -105,7 +102,7 @@ INSERT INTO t2 VALUES (10);
 COMMIT;
 INSERT INTO t2 VALUES (11);
 
---connection server_2
+--connection slave
 --let $wait_condition= SELECT COUNT(*) = 11 FROM t2
 --source include/wait_condition.inc
 
@@ -115,7 +112,7 @@ SELECT * FROM t2 ORDER by a;
 SELECT * FROM t1;
 UNLOCK TABLES;
 
---connection server_2
+--connection slave
 --let $wait_condition= SELECT COUNT(*) = 2 FROM t1
 --source include/wait_condition.inc
 
@@ -123,7 +120,7 @@ SELECT * FROM t1 ORDER BY a;
 
 ##### Case 2 : When IGNORE_DOMAIN_IDS=(1)
 
---connection server_2
+--connection slave_config
 --source include/stop_slave.inc
 let $do_domain_ids_before= query_get_value(SHOW SLAVE STATUS, Replicate_Do_Domain_Ids, 1);
 let $ignore_domain_ids_before= query_get_value(SHOW SLAVE STATUS, Replicate_Ignore_Domain_Ids, 1);
@@ -140,14 +137,14 @@ let $ignore_domain_ids_after= query_get_value(SHOW SLAVE STATUS, Replicate_Ignor
 --echo DO_DOMAIN_IDS (AFTER)     : $do_domain_ids_after
 --echo IGNORE_DOMAIN_IDS (AFTER) : $ignore_domain_ids_after
 
---connection server_2
+--connection slave
 --sync_with_master
 
 # Block the table t1 to simulate a replicated query taking a long time.
 --connection con_temp1
 LOCK TABLE t1 WRITE;
 
---connection server_1
+--connection master
 SET @@session.gtid_domain_id=1;
 # This query will be blocked on the slave until UNLOCK TABLES. However, since
 # IGNORE_DOMAIN_IDS=(1), it will be filtered out on slave.
@@ -163,7 +160,7 @@ INSERT INTO t2 VALUES (15);
 COMMIT;
 INSERT INTO t2 VALUES (16);
 
---connection server_2
+--connection slave
 --let $wait_condition= SELECT COUNT(*) = 16 FROM t2
 --source include/wait_condition.inc
 
@@ -173,7 +170,7 @@ SELECT * FROM t2 ORDER by a;
 SELECT * FROM t1;
 UNLOCK TABLES;
 
---connection server_2
+--connection slave
 --let $wait_condition= SELECT COUNT(*) = 2 FROM t1
 --source include/wait_condition.inc
 
@@ -181,13 +178,11 @@ SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2;
 
 --echo # Restore original settings.
---connection server_1
+--connection master
 SET @@session.gtid_domain_id=0;
 DROP TABLE t1, t2;
---save_master_pos
 
---connection server_2
---sync_with_master
+--sync_slave_with_master slave_config
 --source include/stop_slave.inc
 SET GLOBAL slave_parallel_threads= @old_parallel_threads;
 CHANGE MASTER TO DO_DOMAIN_IDS=(), IGNORE_DOMAIN_IDS=();

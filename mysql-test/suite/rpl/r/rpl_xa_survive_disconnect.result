@@ -31,6 +31,7 @@ XA PREPARE '2';
 XA COMMIT '2';
 XA COMMIT '1-row';
 XA COMMIT '1-stmt';
+connection master_config;
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 master-bin.000001	#	Gtid	#	#	BEGIN GTID #-#-#
@@ -69,9 +70,7 @@ master-bin.000001	#	Gtid	#	#	GTID #-#-#
 master-bin.000001	#	Query	#	#	XA COMMIT X'312d726f77',X'',1
 master-bin.000001	#	Gtid	#	#	GTID #-#-#
 master-bin.000001	#	Query	#	#	XA COMMIT X'312d73746d74',X'',1
-include/sync_slave_sql_with_master.inc
-save_master_pos;
-sync_with_master;
+sync_slave_with_master slave_config;
 include/stop_slave.inc
 connection master;
 connect  master2, 127.0.0.1,root,,test,$MASTER_MYPORT,;
@@ -182,12 +181,13 @@ XA END 'bulk_trx_1';
 XA PREPARE 'bulk_trx_1';
 disconnect master_bulk_conn1;
 connection master;
-connection slave;
+connection slave_config;
 include/start_slave.inc
-connection master;
+connection master_config;
 include/sync_slave_sql_with_master.inc
 save_master_pos;
 sync_with_master;
+connection slave_config;
 include/stop_slave.inc
 connection master;
 XA COMMIT 'bulk_trx_10';
@@ -201,7 +201,7 @@ XA ROLLBACK 'bulk_trx_3';
 XA COMMIT 'bulk_trx_2';
 XA ROLLBACK 'bulk_trx_1';
 include/rpl_restart_server.inc [server_number=1]
-connection slave;
+connection slave_config;
 include/start_slave.inc
 connection master;
 *** '3-stmt','3-row' xa-transactions must be in the list ***

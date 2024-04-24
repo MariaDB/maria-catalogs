@@ -128,6 +128,7 @@ if (`SELECT count(*) FROM mysql.proc WHERE name like '$dbname'`)
   -- die Procedure not dropped on SLAVE
 }
 
+--connection slave_config
 -- let $last_error = query_get_value("SHOW SLAVE STATUS", Last_SQL_Errno, 1)
 if ($last_error)
 {

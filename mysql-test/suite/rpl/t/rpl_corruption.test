@@ -24,7 +24,7 @@
 --source include/have_debug.inc
 --source include/master-slave.inc
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 CHANGE MASTER TO MASTER_USE_GTID=NO;
 --source include/start_slave.inc
@@ -38,7 +38,9 @@ call mtr.add_suppression('Replication event checksum verification failed');
 call mtr.add_suppression('Event crc check failed! Most likely there is event corruption');
 call mtr.add_suppression('Slave SQL: Error initializing relay log position: I/O error reading event at position .*, error.* 1593');
 
+--connection master_config
 SET @old_master_verify_checksum = @@master_verify_checksum;
+--connection master
 
 # Creating test table/data and set corruption position for testing
 --echo # 1. Creating test table/data and set corruption position for testing
@@ -65,8 +67,9 @@ while ($i) {
     eval DELETE FROM t1 WHERE a = $j;
   }
   if (!$pos) {
+    --connection master_config
     let $pos= query_get_value(SHOW MASTER STATUS, Position, 1);
-    --sync_slave_with_master
+    --sync_slave_with_master slave_config
     --source include/stop_slave.inc
     --disable_query_log
     --connection master
@@ -82,12 +85,14 @@ while ($i) {
 SET @saved_dbug = @@global.debug_dbug;
 SET @@global.debug_dbug="d,corrupt_read_log_event_char";
 --echo SHOW BINLOG EVENTS;
+--connection master_config
 --disable_query_log
 send_eval SHOW BINLOG EVENTS FROM $pos;
 --enable_query_log
 --error ER_ERROR_WHEN_EXECUTING_COMMAND
 reap;
 
+--connection master
 SET @@global.debug_dbug=@saved_dbug;
 
 # Emulate corruption on master with crc checking on master
@@ -114,7 +119,7 @@ let $wait_condition=
 --source include/wait_condition.inc
 
 SET @@global.debug_dbug="d,corrupt_read_log_event2_set";
---connection slave
+--connection slave_config
 START SLAVE IO_THREAD;
 let $slave_io_errno= 1236;
 --let $slave_timeout= 10
@@ -124,10 +129,10 @@ SET @@global.debug_dbug=@saved_dbug;
 
 # Emulate corruption on master without crc checking on master
 --echo # 4. Master read a corrupted event from binlog and send it to slave
---connection master
+--connection master_config
 SET GLOBAL master_verify_checksum=0;
 SET @@global.debug_dbug="d,corrupt_read_log_event2_set";
---connection slave
+--connection slave_config
 START SLAVE IO_THREAD;
 # When the checksum error is detected, the slave sets error code 1743
 # (ER_NETWORK_READ_EVENT_CHECKSUM_FAILURE) in queue_event(), then immediately
@@ -135,13 +140,13 @@ START SLAVE IO_THREAD;
 # So we usually get 1595, but it is occasionally possible to get 1743.
 let $slave_io_errno= 1595,1743; # ER_SLAVE_RELAY_LOG_WRITE_FAILURE, ER_NETWORK_READ_EVENT_CHECKSUM_FAILURE
 --source include/wait_for_slave_io_error.inc
---connection master
+--connection master_config
 SET @@global.debug_dbug=@saved_dbug;
 SET GLOBAL master_verify_checksum=1;
 
 # Emulate corruption in network
 --echo # 5. Slave. Corruption in network
---connection slave
+--connection slave_config
 SET @saved_dbug_slave = @@GLOBAL.debug_dbug;
 SET @@global.debug_dbug="d,corrupt_queue_event";
 START SLAVE IO_THREAD;
@@ -163,18 +168,20 @@ SET @@global.debug_dbug=@saved_dbug_slave;
 # Start normal replication and compare same table on master
 # and slave
 --echo # 7. Seek diff for tables on master and slave
---connection slave
+--connection slave_config
 --source include/start_slave.inc
---connection master
+--connection master_config
 --sync_slave_with_master
+--connection master
 let $diff_tables= master:test.t1, slave:test.t1;
 --source include/diff_tables.inc
                                                                
 # Clean up
 --echo # 8. Clean up
---connection master
+--connection master_config
 set @@global.debug_dbug = @saved_dbug;
 SET GLOBAL master_verify_checksum = @old_master_verify_checksum;
+--connection master
 DROP TABLE t1;
 --sync_slave_with_master
 

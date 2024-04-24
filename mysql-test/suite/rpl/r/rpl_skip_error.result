@@ -31,6 +31,7 @@ n
 3
 7
 8
+connection slave_config;
 include/check_slave_is_running.inc
 ==== Clean Up ====
 connection master;
@@ -51,6 +52,7 @@ select * from t1;
 a
 1
 2
+connection slave_config;
 include/check_slave_is_running.inc
 ==== Clean Up ====
 connection master;
@@ -90,6 +92,7 @@ SET SQL_LOG_BIN=1;
 UPDATE t1 SET id= id + 3, data = 2;
 sync_slave_with_master;
 connection slave;
+connection slave_config;
 
 **** We cannot execute a select as there are differences in the 
 **** behavior between STMT and RBR.
@@ -126,6 +129,7 @@ SET SQL_LOG_BIN=1;
 UPDATE t2 SET id= id + 3, data = 2;
 sync_slave_with_master;
 connection slave;
+connection slave_config;
 
 # Slave_skipped_errros = 5
 **** We cannot execute a select as there are differences in the 

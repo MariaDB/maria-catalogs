@@ -20,6 +20,7 @@ let $old_binlog_stmt_cache_size= query_get_value(SHOW VARIABLES LIKE "binlog_stm
 
 --echo "*********** Annotate Event write failure **************"
 
+connection master_config;
 SET GLOBAL max_binlog_cache_size = 4096;
 SET GLOBAL binlog_cache_size = 4096;
 SET GLOBAL max_binlog_stmt_cache_size = 4096;
@@ -118,7 +119,7 @@ if(`SELECT COUNT(*)!=1 FROM t2`)
 --echo # ..success
 --source include/save_master_gtid.inc
 
---connection slave
+--connection slave_config
 --source include/sync_with_master_gtid.inc
 --echo # Validating the first insert into t2 replicated to slave..
 --let $diff_tables= master:test.t2,slave:test.t2
@@ -136,10 +137,11 @@ if(`SELECT COUNT(*)!=1 FROM t2`)
 --echo "# Test Case3: Annotate event write failure for mixed engine UPDATE    #"
 --echo "#######################################################################"
 
---connection master
+--connection master_config
 let $new_data = `select concat('"', repeat('b',2000), '"')`;
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
 --disable_query_log
+--connection master
 --error ER_STMT_CACHE_FULL
 eval UPDATE t1,t2 SET t1.data="Hello", t2.data=CONCAT($new_data,$new_data,$new_data,$new_data,$new_data);
 --enable_query_log
@@ -186,7 +188,7 @@ if(`SELECT COUNT(*) from t2 where data LIKE "b%"`)
 }
 --echo # ..success
 
---connection master
+--connection master_config
 
 --echo "****** Clean up *******"
 --replace_result $old_max_binlog_cache_size ORIGINAL_VALUE
@@ -198,6 +200,7 @@ if(`SELECT COUNT(*) from t2 where data LIKE "b%"`)
 --replace_result $old_binlog_stmt_cache_size ORIGINAL_VALUE
 --eval SET GLOBAL binlog_stmt_cache_size= $old_binlog_stmt_cache_size
 
+--connection master
 DROP TABLE t1,t2;
 
 --echo "*********** TABLE MAP Event write failure **************"
@@ -213,8 +216,9 @@ INSERT INTO ti VALUES (20);
 --echo "# Test Case4: Table_map event write failure for trans engine UPDATE   #"
 --echo "#######################################################################"
 --echo # Transaction should be rolled back without writing incident event
---connection master
+--connection master_config
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
+--connection master
 SET debug_dbug="+d,table_map_write_error";
 --error ER_TRANS_CACHE_FULL
 UPDATE ti, tm set ti.f=30;
@@ -236,15 +240,16 @@ if(`SELECT COUNT(*) FROM ti WHERE f=130`)
 
 --source include/save_master_gtid.inc
 
---connection slave
+--connection slave_config
 --source include/sync_with_master_gtid.inc
 
 --echo "#######################################################################"
 --echo "# Test Case5: Table_map event write failure for mixed engine UPDATE   #"
 --echo "#######################################################################"
---connection master
+--connection master_config
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
 --echo # In case of mixed engines if non trans table is updated write INCIDENT event
+--connection master
 --error ER_TRANS_CACHE_FULL
 UPDATE ti,tm SET tm.f=88, ti.f=120;
 
@@ -292,9 +297,10 @@ if(`SELECT COUNT(*) FROM ti WHERE f=120`)
 --echo "# with a table_map event write failure on the second event should
 --echo "# roll-back only the second update without incident
 --echo "#######################################################################"
---connection master
+--connection master_config
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
 
+--connection master
 SET debug_dbug="";
 BEGIN;
 # successful update
@@ -325,9 +331,9 @@ if(`SELECT COUNT(*) FROM ti WHERE f=50`)
 --echo # ..success
 
 --echo # Validating that only the first update replicated to slave without incident
---connection master
+--connection master_config
 --source include/save_master_gtid.inc
---connection slave
+--connection slave_config
 --source include/sync_with_master_gtid.inc
 --let $diff_tables= master:test.ti,slave:test.ti
 --source include/diff_tables.inc
@@ -340,9 +346,10 @@ if(`SELECT COUNT(*) FROM ti WHERE f=50`)
 --echo "# with a table_map event write failure on the second event should
 --echo "# roll-back both updates without incident
 --echo "#######################################################################"
---connection master
+--connection master_config
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
 
+--connection master
 SET debug_dbug="";
 BEGIN;
 # successful update
@@ -372,10 +379,10 @@ if(`SELECT COUNT(*) FROM ti WHERE f=70`)
 --echo # ..success
 
 --echo # Validating the transaction did not replicate to the slave
---connection master
+--connection master_config
 --source include/save_master_gtid.inc
 
---connection slave
+--connection slave_config
 --source include/sync_with_master_gtid.inc
 --let $diff_tables= master:test.ti,slave:test.ti
 --source include/diff_tables.inc
@@ -388,9 +395,10 @@ if(`SELECT COUNT(*) FROM ti WHERE f=70`)
 --echo "# with a table_map event write failure on the second event should
 --echo "# roll-back only the second update with incident
 --echo "#######################################################################"
---connection master
+--connection master_config
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
 
+--connection master
 BEGIN;
 # successful update
 SET debug_dbug="";
@@ -457,9 +465,10 @@ if(`SELECT COUNT(*) FROM tm WHERE f=99`)
 --echo "# roll-back both transactional updates, preserve the non-transactional
 --echo "# update on the master (only), and write an incident event
 --echo "#######################################################################"
---connection master
+--connection master_config
 --let $old_gtid_binlog_pos= query_get_value(SHOW VARIABLES LIKE 'gtid_binlog_pos', Value, 1)
 
+--connection master
 SET debug_dbug="";
 BEGIN;
 # successful update

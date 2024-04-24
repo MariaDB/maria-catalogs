@@ -32,10 +32,9 @@
 --let $include_filename= sync_slave_io_with_master.inc
 --source include/begin_include_file.inc
 
-
 --source include/save_master_pos.inc
 
---let $rpl_connection_name= slave
+--let $rpl_connection_name= slave_config
 if ($sync_slave_connection)
 {
   --let $rpl_connection_name= $sync_slave_connection

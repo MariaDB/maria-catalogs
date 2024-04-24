@@ -6,6 +6,7 @@
 # ==== Usage ====
 #
 # [--let $master_use_gtid_option= NO]
+# [--let $use_current_connection= 1]
 # --source include/reset_slave.inc
 #
 # Parameters:
@@ -23,6 +24,12 @@
 --let $include_filename= reset_slave.inc
 --source include/begin_include_file.inc
 
+if (!$use_current_connection)
+{
+--disable_connect_log
+--connection slave_config
+--enable_connect_log
+}
 
 if (!$rpl_debug)
 {

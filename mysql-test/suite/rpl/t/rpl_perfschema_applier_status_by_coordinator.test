@@ -42,8 +42,7 @@ let $assert_text= On master, the table should return an empty set.;
 let $assert_cond= count(*) = 0 from performance_schema.replication_applier_status_by_coordinator;
 source include/assert.inc;
 
---connection slave
-
+--connection slave_config
 --let $slave_param= Slave_SQL_Running_State
 --let $slave_param_value= Slave has read all relay log; waiting for more updates
 source include/wait_for_slave_param.inc;
@@ -105,7 +104,7 @@ create table t(a int primary key);
 drop table t;
 --connection master
 insert into t values(1);
---connection slave
+--connection slave_config
 let $slave_sql_errno=1146;
 source include/wait_for_slave_sql_error.inc;
 
@@ -208,7 +207,7 @@ EOF
 drop table t;
 reset master;
 
---connection slave
+--connection slave_config
 --source include/stop_slave.inc
 reset slave;
 reset master;
@@ -253,8 +252,8 @@ source include/assert.inc;
 drop table t1;
 --sync_slave_with_master
 --disconnect slave2
+--connection slave_config
 set global slave_transaction_retry_interval=@saved_slave_trans_retry_interval;
-
 source include/stop_slave.inc;
 
 --echo
@@ -270,7 +269,7 @@ source include/stop_slave.inc;
 --let $rpl_server_number= 2
 --source include/rpl_restart_server.inc
 
---connection slave
+--connection slave_config
 replace_result $MASTER_MYPORT MASTER_MYPORT;
 replace_column 2 ###;
 eval change master to

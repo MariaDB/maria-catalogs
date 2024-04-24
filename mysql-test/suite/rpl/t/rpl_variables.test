@@ -59,7 +59,10 @@
 # rpl.rpl_variables_stm tests the small subset of variables that
 # actually can be replicated safely in statement mode.
 
+# We cannnot run this with catalogs other than 'def' as these users
+# cannot change global variables
 
+source include/not_catalogs_or_def.inc;
 source include/have_binlog_format_mixed_or_row.inc;
 source include/master-slave.inc;
 

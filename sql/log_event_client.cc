@@ -1836,10 +1836,11 @@ bool Query_log_event::print_query_header(IO_CACHE* file,
   if (print_event_info->catalog != catalog)
   {
     print_event_info->catalog= catalog;
-    if (my_b_printf(file, "/*!110600 USE CATALOG `%.*s` */%s\n",
+    if (my_b_printf(file, "/*!110000 USE CATALOG `%.*s` */%s\n",
                     catalog_name.length, catalog_name.str,
                     print_event_info->delimiter))
       goto err;
+    print_event_info->db[0]= 0;               // Reset database
   }
 
   if ((flags & LOG_EVENT_SUPPRESS_USE_F))
