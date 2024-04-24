@@ -3,7 +3,7 @@ include/master-slave.inc
 #
 # New --dump-slave, --apply-slave-statements functionality
 #
-connection slave;
+sync_slave_with_master;
 connection master;
 use test;
 connection slave;
@@ -30,7 +30,7 @@ connection master;
 SET gtid_seq_no = 1000;
 CREATE TABLE t1 (a INT PRIMARY KEY);
 DROP TABLE t1;
-connection slave;
+sync_slave_with_master;
 connection slave;
 CREATE TABLE t2 (a INT PRIMARY KEY);
 DROP TABLE t2;

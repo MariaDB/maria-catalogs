@@ -1,7 +1,7 @@
 include/master-slave.inc
 [connection master]
 connection master;
-connection slave;
+sync_slave_with_master;
 connection slave;
 stop slave;
 connection master;

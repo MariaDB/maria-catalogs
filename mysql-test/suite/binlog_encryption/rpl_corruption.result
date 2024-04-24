@@ -56,12 +56,12 @@ SET @@global.debug_dbug=@saved_dbug_slave;
 connection slave;
 include/start_slave.inc
 connection master;
-connection slave;
+sync_slave_with_master;
 include/diff_tables.inc [master:test.t1, slave:test.t1]
 # 8. Clean up
 connection master;
 set @@global.debug_dbug = @saved_dbug;
 SET GLOBAL master_verify_checksum = @old_master_verify_checksum;
 DROP TABLE t1;
-connection slave;
+sync_slave_with_master;
 include/rpl_end.inc
