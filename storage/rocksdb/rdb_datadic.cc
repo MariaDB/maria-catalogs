@@ -3614,8 +3614,14 @@ time_t Rdb_tbl_def::get_create_time() {
     // Read it from the .frm file. It's not a problem if several threads do this
     // concurrently
     char path[FN_REFLEN];
-    snprintf(path, sizeof(path), "%s/%s/%s%s", mysql_data_home,
-             m_dbname.c_str(), m_tablename.c_str(), reg_ext);
+    if (using_catalogs) {
+      snprintf(path, sizeof(path), "%s/%s/%s/%s%s", mysql_data_home,
+               m_catname.c_str(), m_dbname.c_str(), m_tablename.c_str(),
+               reg_ext);
+    } else {
+      snprintf(path, sizeof(path), "%s/%s/%s%s", mysql_data_home,
+               m_dbname.c_str(), m_tablename.c_str(), reg_ext);
+    }
     unpack_filename(path,path);
     MY_STAT f_stat;
     if (my_stat(path, &f_stat, MYF(0)))
@@ -3700,8 +3706,8 @@ void Rdb_tbl_def::set_name(const std::string &name) {
   int err MY_ATTRIBUTE((__unused__));
 
   m_dbname_tablename = name;
-  err = rdb_split_normalized_tablename(name, &m_dbname, &m_tablename,
-                                       &m_partition);
+  err = rdb_split_normalized_tablename(name, &m_catname, &m_dbname,
+                                       &m_tablename, &m_partition);
   DBUG_ASSERT(err == 0);
 
   check_if_is_mysql_system_table();
@@ -3895,8 +3901,8 @@ bool Rdb_validate_tbls::scan_for_frms(const std::string &datadir,
 bool Rdb_validate_tbls::compare_to_actual_tables(const std::string &datadir,
                                                  bool *has_errors) {
   bool result = true;
-  struct st_my_dir *dir_info;
-  struct fileinfo *file_info;
+  struct st_my_dir *dir_info, *l2_dir_info = NULL;
+  struct fileinfo *file_info, *l2_file_info;
 
   dir_info = my_dir(datadir.c_str(), MYF(MY_DONT_SORT | MY_WANT_STAT));
   if (dir_info == nullptr) {
@@ -3913,10 +3919,27 @@ bool Rdb_validate_tbls::compare_to_actual_tables(const std::string &datadir,
     /* Ignore all non-directory files */
     if (!MY_S_ISDIR(file_info->mystat->st_mode)) continue;
 
-    /* Scan all the .frm files in the directory */
-    if (!scan_for_frms(datadir, file_info->name, has_errors)) {
-      result = false;
-      break;
+    if (!using_catalogs) {
+      /* Scan all the .frm files in the directory */
+      if (!scan_for_frms(datadir, file_info->name, has_errors)) {
+        result = false;
+        break;
+      }
+    } else {
+      /* We got a Catalog here, scan that for DBs */
+      std::string catdir = datadir + FN_LIBCHAR + file_info->name + FN_LIBCHAR;
+      l2_dir_info = my_dir(catdir.c_str(), MYF(MY_DONT_SORT | MY_WANT_STAT));
+      l2_file_info = l2_dir_info->dir_entry;
+      for (size_t jj = 0; jj < l2_dir_info->number_of_files; jj++,
+           l2_file_info++) {
+        if (l2_file_info->name[0] == '.') continue;
+        if (!MY_S_ISDIR(l2_file_info->mystat->st_mode)) continue;
+        if (!scan_for_frms(catdir, l2_file_info->name, has_errors)) {
+          result = false;
+          break;
+        }
+      }
+      my_dirend(l2_dir_info);
     }
   }
 

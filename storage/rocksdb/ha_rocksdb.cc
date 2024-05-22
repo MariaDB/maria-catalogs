@@ -5073,11 +5073,12 @@ static bool rocksdb_rollback_to_savepoint_can_release_mdl(
 */
 static void rocksdb_update_table_stats(
     /* per-table stats callback */
-    void (*cb)(const char *db, const char *tbl, bool is_partition,
-               my_io_perf_t *r, my_io_perf_t *w, my_io_perf_t *r_blob,
-               my_io_perf_t *r_primary, my_io_perf_t *r_secondary,
-               page_stats_t *page_stats, comp_stats_t *comp_stats,
-               int n_lock_wait, int n_lock_wait_timeout, int n_lock_deadlock,
+    void (*cb)(const char *catalog, const char *db, const char *tbl,
+               bool is_partition, my_io_perf_t *r, my_io_perf_t *w,
+               my_io_perf_t *r_blob, my_io_perf_t *r_primary,
+               my_io_perf_t *r_secondary, page_stats_t *page_stats,
+               comp_stats_t *comp_stats, int n_lock_wait,
+               int n_lock_wait_timeout, int n_lock_deadlock,
                const char *engine)) {
   my_io_perf_t io_perf_read;
   my_io_perf_t io_perf_write;
@@ -5102,7 +5103,8 @@ static void rocksdb_update_table_stats(
 
   for (const auto &it : tablenames) {
     Rdb_table_handler *table_handler;
-    std::string str, dbname, tablename, partname;
+    std::string str, catname, dbname, tablename, partname;
+    char catname_sys[NAME_LEN + 1];
     char dbname_sys[NAME_LEN + 1];
     char tablename_sys[NAME_LEN + 1];
     bool is_partition;
@@ -5116,7 +5118,8 @@ static void rocksdb_update_table_stats(
       return;
     }
 
-    if (rdb_split_normalized_tablename(str, &dbname, &tablename, &partname)) {
+    if (rdb_split_normalized_tablename(str, &catname &dbname, &tablename,
+        &partname)) {
       continue;
     }
 
@@ -5157,11 +5160,13 @@ static void rocksdb_update_table_stats(
       Table stats expects our database and table name to be in system encoding,
       not filename format. Convert before calling callback.
      */
+    my_core::filename_to_tablename(catname.c_str(), catname_sys,
+                                   sizeof(catname_sys));
     my_core::filename_to_tablename(dbname.c_str(), dbname_sys,
                                    sizeof(dbname_sys));
     my_core::filename_to_tablename(tablename.c_str(), tablename_sys,
                                    sizeof(tablename_sys));
-    (*cb)(dbname_sys, tablename_sys, is_partition, &io_perf_read,
+    (*cb)(catname_sys, dbname_sys, tablename_sys, is_partition, &io_perf_read,
           &io_perf_write, &io_perf, &io_perf, &io_perf, &page_stats,
           &comp_stats, lock_wait_stats, lock_wait_timeout_stats, deadlock_stats,
           rocksdb_hton_name);
@@ -7629,6 +7634,20 @@ int rdb_normalize_tablename(const std::string &tablename,
 
   *strbuf = tablename.substr(2, pos - 2) + "." + tablename.substr(pos + 1);
 
+  if (using_catalogs) {
+    std::string tablename2 = *strbuf;
+    size_t pos2 = tablename2.find_first_of(FN_LIBCHAR, pos + 1);
+    if (pos2 == std::string::npos) {
+      pos2 = tablename2.find_first_of(FN_LIBCHAR2, pos + 1);
+    }
+
+    if (pos2 == std::string::npos) {
+      DBUG_ASSERT(0);  // We were not passed table name?
+      return HA_ERR_ROCKSDB_INVALID_TABLE;
+    }
+    *strbuf = tablename2.substr(0, pos2) + "." + tablename2.substr(pos2 + 1);
+  }
+
   return HA_EXIT_SUCCESS;
 }
 
@@ -7686,6 +7705,7 @@ bool ha_rocksdb::contains_foreign_key(THD *const thd) {
   @brief
   splits the normalized table name of <dbname>.<tablename>#P#<part_no> into
   the <dbname>, <tablename> and <part_no> components.
+  For Catalogs this is <catname>.<dbname>.<tablename>.
 
   @param dbbuf returns database name/table_schema
   @param tablebuf returns tablename
@@ -7693,15 +7713,31 @@ bool ha_rocksdb::contains_foreign_key(THD *const thd) {
   @return HA_EXIT_SUCCESS on success, non-zero on failure to split
 */
 int rdb_split_normalized_tablename(const std::string &fullname,
+                                   std::string *const cat,
                                    std::string *const db,
                                    std::string *const table,
                                    std::string *const partition) {
   DBUG_ASSERT(!fullname.empty());
 
+  ssize_t dotpos;
+  size_t start = 0;
 #define RDB_PARTITION_STR "#P#"
 
+  if (using_catalogs) {
+    dotpos = fullname.find('.');
+
+    if (dotpos == std::string::npos) {
+      return HA_ERR_ROCKSDB_INVALID_TABLE;
+    }
+
+    if (cat != nullptr) {
+      *cat = fullname.substr(0, dotpos);
+    }
+    start = dotpos + 1;
+  }
+
   /* Normalize returns dbname.tablename. */
-  size_t dotpos = fullname.find('.');
+  dotpos = fullname.find('.', start);
 
   /* Invalid table name? */
   if (dotpos == std::string::npos) {
@@ -7712,7 +7748,7 @@ int rdb_split_normalized_tablename(const std::string &fullname,
   DBUG_ASSERT(dotpos > 0);
 
   if (db != nullptr) {
-    *db = fullname.substr(0, dotpos);
+    *db = fullname.substr(start, dotpos - start);
   }
 
   dotpos++;
@@ -11885,6 +11921,8 @@ int ha_rocksdb::rename_table(const char *const from, const char *const to) {
 
   std::string from_str;
   std::string to_str;
+  std::string from_cat;
+  std::string to_cat;
   std::string from_db;
   std::string to_db;
 
@@ -11893,7 +11931,7 @@ int ha_rocksdb::rename_table(const char *const from, const char *const to) {
     DBUG_RETURN(rc);
   }
 
-  rc = rdb_split_normalized_tablename(from_str, &from_db);
+  rc = rdb_split_normalized_tablename(from_str, &from_cat, &from_db);
   if (rc != HA_EXIT_SUCCESS) {
     DBUG_RETURN(rc);
   }
@@ -11903,14 +11941,15 @@ int ha_rocksdb::rename_table(const char *const from, const char *const to) {
     DBUG_RETURN(rc);
   }
 
-  rc = rdb_split_normalized_tablename(to_str, &to_db);
+  rc = rdb_split_normalized_tablename(to_str, &to_cat, &to_db);
   if (rc != HA_EXIT_SUCCESS) {
     DBUG_RETURN(rc);
   }
 
   // If the user changed the database part of the name then validate that the
   // 'to' database exists.
-  if (from_db != to_db && !rdb_database_exists(to_db)) {
+  // Rename will always be within a single DB.
+  if (from_db != to_db && !rdb_database_exists(to_cat, to_db)) {
     // If we return a RocksDB specific error code here we get
     // "error: 206 - Unknown error 206".  InnoDB gets
     // "error -1 - Unknown error -1" so let's match them.

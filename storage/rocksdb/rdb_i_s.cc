@@ -14,6 +14,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02111-1301 USA */
 
+#define MYSQL_SERVER 1
 #include <my_global.h>
 
 /* C++ standard header files */
@@ -254,10 +255,12 @@ static int rdb_i_s_dbstats_init(void *const p) {
   Support for INFORMATION_SCHEMA.ROCKSDB_PERF_CONTEXT dynamic table
  */
 namespace RDB_PERF_CONTEXT_FIELD {
-enum { TABLE_SCHEMA = 0, TABLE_NAME, PARTITION_NAME, STAT_TYPE, VALUE };
+enum { TABLE_CATALOG = 0, TABLE_SCHEMA, TABLE_NAME, PARTITION_NAME, STAT_TYPE,
+       VALUE };
 }  // namespace RDB_PERF_CONTEXT_FIELD
 
 static ST_FIELD_INFO rdb_i_s_perf_context_fields_info[] = {
+    Column("TABLE_CATALOG",  Varchar(NAME_LEN + 1), NOT_NULL),
     Column("TABLE_SCHEMA",   Varchar(NAME_LEN + 1), NOT_NULL),
     Column("TABLE_NAME",     Varchar(NAME_LEN + 1), NOT_NULL),
     Column("PARTITION_NAME", Varchar(NAME_LEN + 1), NULLABLE),
@@ -287,7 +290,7 @@ static int rdb_i_s_perf_context_fill_table(
   const std::vector<std::string> tablenames = rdb_get_open_table_names();
 
   for (const auto &it : tablenames) {
-    std::string str, dbname, tablename, partname;
+    std::string str, catname, dbname, tablename, partname;
     Rdb_perf_counters counters;
 
     int rc = rdb_normalize_tablename(it, &str);
@@ -296,12 +299,25 @@ static int rdb_i_s_perf_context_fill_table(
       DBUG_RETURN(rc);
     }
 
-    if (rdb_split_normalized_tablename(str, &dbname, &tablename, &partname)) {
+    if (rdb_split_normalized_tablename(str, &catname, &dbname, &tablename,
+        &partname)) {
       continue;
     }
 
     if (rdb_get_table_perf_counters(it.c_str(), &counters)) {
       continue;
+    }
+
+    if (!using_catalogs) {
+      field[RDB_PERF_CONTEXT_FIELD::TABLE_CATALOG]->store(default_catalog_name,
+                                                          system_charset_info);
+    } else {
+      /* Only display the table in this I_S we have Catalog access */
+      MYSQL_CONST_LEX_STRING cat;
+      cat.str= catname.data();
+      cat.length= catname.length();
+      if (!check_catalog_access(thd, &cat))
+        continue;
     }
 
     field[RDB_PERF_CONTEXT_FIELD::TABLE_SCHEMA]->store(
