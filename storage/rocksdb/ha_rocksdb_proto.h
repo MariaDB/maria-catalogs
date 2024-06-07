@@ -49,7 +49,8 @@ void rdb_handle_io_error(const rocksdb::Status status,
 int rdb_normalize_tablename(const std::string &tablename, std::string *str)
     MY_ATTRIBUTE((__nonnull__, __warn_unused_result__));
 
-int rdb_split_normalized_tablename(const std::string &fullname, std::string *db,
+int rdb_split_normalized_tablename(const std::string &fullname,
+                                   std::string *cat, std::string *db,
                                    std::string *table = nullptr,
                                    std::string *partition = nullptr)
     MY_ATTRIBUTE((__warn_unused_result__));

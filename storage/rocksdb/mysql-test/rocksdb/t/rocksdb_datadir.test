@@ -1,3 +1,6 @@
+# Bootstrap command doesn't work with Catalogs
+--source include/not_catalogs.inc
+
 --source include/have_rocksdb.inc
 let $ddir = $MYSQL_TMP_DIR/.rocksdb_datadir.test.install.db;
 let $rdb_ddir = $MYSQL_TMP_DIR/.rocksdb_datadir.test;
