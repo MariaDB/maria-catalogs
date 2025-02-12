@@ -38,3 +38,8 @@ DROP TABLE t1, t2;
 #--exec $MYSQL_SHOW INFORMATION_SCHEMA
 #--exec $MYSQL_SHOW inf_rmation_schema
 
+--echo #
+--echo # MDEV-31705: Upgrade MariaDB clients with --catalog
+--echo #
+
+--exec $MYSQL_SHOW --catalog=def test

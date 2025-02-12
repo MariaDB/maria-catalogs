@@ -36,7 +36,6 @@
 
 #include <welcome_copyright_notice.h>   /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
-
 /* Global Thread counter */
 uint counter= 0;
 pthread_mutex_t init_mutex;
@@ -58,7 +57,8 @@ static char	*opt_password=0, *current_user=0,
 		*current_host=0, *current_db=0, *fields_terminated=0,
 		*lines_terminated=0, *enclosed=0, *opt_enclosed=0,
 		*escaped=0, *opt_columns=0, 
-		*default_charset= (char*) MYSQL_AUTODETECT_CHARSET_NAME;
+		*default_charset= (char*) MYSQL_AUTODETECT_CHARSET_NAME,
+    *current_catalog= 0, *current_database= 0;
 static uint     opt_mysql_port= 0, opt_protocol= 0;
 static char * opt_mysql_unix_port=0;
 static char *opt_plugin_dir= 0, *opt_default_auth= 0;
@@ -183,7 +183,9 @@ static struct my_option my_long_options[] =
    &verbose, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 
@@ -480,6 +482,14 @@ static MYSQL *db_connect(char *host, char *database,
   mysql_options(mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
   mysql_options4(mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqlimport");
+
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(mysql, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
   if (!(mysql_real_connect(mysql,host,user,passwd,
                            database,opt_mysql_port,opt_mysql_unix_port,
                            0)))

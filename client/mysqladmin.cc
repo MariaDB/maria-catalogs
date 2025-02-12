@@ -47,7 +47,7 @@ static my_bool debug_info_flag= 0, debug_check_flag= 0;
 static uint tcp_port = 0, option_wait = 0, option_silent=0, nr_iterations;
 static uint opt_count_iterations= 0, my_end_arg;
 static ulong opt_connect_timeout, opt_shutdown_timeout;
-static char * unix_port=0;
+static char * unix_port=0, *current_catalog= 0, *current_database;
 static char *opt_plugin_dir= 0, *opt_default_auth= 0;
 static bool sql_log_bin_off= false;
 
@@ -232,7 +232,9 @@ static struct my_option my_long_options[] =
    "Default authentication client-side plugin to use.",
    &opt_default_auth, &opt_default_auth, 0,
    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 
@@ -545,6 +547,14 @@ sig_handler endprog(int signal_number __attribute__((unused)))
 static my_bool sql_connect(MYSQL *mysql, uint wait)
 {
   my_bool info=0;
+
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(mysql, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
 
   for (;;)
   {

@@ -260,3 +260,9 @@ DROP TABLE t1;
 #
 # Bug MDEV-15789 (Upstream: #80329): MYSQLSLAP OPTIONS --AUTO-GENERATE-SQL-GUID-PRIMARY and --AUTO-GENERATE-SQL-SECONDARY-INDEXES DONT WORK
 #
+#
+# MDEV-31705: Upgrade MariaDB clients with --catalog
+#
+select 1;
+select 1;
+select 1;

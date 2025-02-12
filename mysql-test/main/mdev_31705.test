@@ -1,0 +1,113 @@
+--source include/have_catalogs.inc
+--source include/have_log_bin.inc
+
+CREATE CATALOG cat1;
+CREATE CATALOG cat2;
+USE CATALOG cat1;
+
+CREATE USER cat1_root@localhost;
+GRANT ALL PRIVILEGES on *.* to cat1_root@localhost;
+
+CREATE DATABASE test;
+
+connect(con1,localhost,cat1_root,,cat1.test);
+
+SELECT CURRENT_USER();
+
+--exec $MYSQLADMIN --default-character-set=latin1 --catalog=cat1 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= ping 2>&1
+--replace_regex /^.*mariadb-admin/mariadb-admin/
+--exec $MYSQLADMIN --default-character-set=latin1 --catalog=cat2 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= ping 2>&1
+--replace_regex /^.*mariadb-admin/mariadb-admin/
+--error 7
+--exec $MYSQLADMIN --default-character-set=latin1 --catalogd=cat2 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= ping 2>&1
+
+--exec $MYSQL_SLAP --catalog=cat1 --only-print --iterations=3  --query="select 1" --delimiter=";"
+--exec $MYSQL_SLAP --catalog=cat2 --only-print --iterations=3  --query="select 1" --delimiter=";"
+--error 7
+--exec $MYSQL_SLAP --catalogd=cat2 --only-print --iterations=3  --query="select 1" --delimiter=";"
+
+--exec $MYSQL_SHOW --catalog=cat1 test -u cat1_root --password=
+--error 1
+--exec $MYSQL_SHOW --catalog=cat2 test -u cat1_root --password=
+--error 7
+--exec $MYSQL_SHOW --catalogd=cat1 test -u cat1_root --password=
+
+CREATE TABLE t1 (a INT);
+INSERT IGNORE INTO t1 VALUES (1);
+
+--exec $MYSQL_DUMP -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=cat1 test > $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--error 2
+--exec $MYSQL_DUMP -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=cat2 test > $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--error 7
+--exec $MYSQL_DUMP -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalogd=cat1 test > $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+
+
+--exec echo "1\tvalue1\n2\tvalue2" > $MYSQLTEST_VARDIR/tmp/t1.txt
+--exec $MYSQL_IMPORT -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=cat1 test $MYSQLTEST_VARDIR/tmp/t1.txt
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+--exec echo "1\tvalue1\n2\tvalue2" > $MYSQLTEST_VARDIR/tmp/t1.txt
+--error 1
+--exec $MYSQL_IMPORT -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=cat2 test $MYSQLTEST_VARDIR/tmp/t1.txt
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+--exec echo "1\tvalue1\n2\tvalue2" > $MYSQLTEST_VARDIR/tmp/t1.txt
+--error 7
+--exec $MYSQL_IMPORT -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalogd=cat1 test $MYSQLTEST_VARDIR/tmp/t1.txt
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+
+DROP TABLE t1;
+
+CREATE TABLE t1(a int);
+--replace_result 'Table is already up to date' OK
+--exec $MYSQL_CHECK --catalog=cat1 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --databases test
+DROP TABLE t1;
+CREATE TABLE t1(a int);
+--error 2
+--replace_result 'Table is already up to date' OK
+--exec $MYSQL_CHECK --catalog=cat2 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --databases test
+DROP TABLE t1;
+CREATE TABLE t1(a int);
+--error 7
+--replace_result 'Table is already up to date' OK
+--exec $MYSQL_CHECK --catalogd=cat2 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --databases test
+DROP TABLE t1;
+
+--exec echo "t1" | $MARIADB_CONV --catalog=cat1
+
+connection default;
+disconnect con1;
+
+SELECT CURRENT_USER();
+
+USE test;
+
+CREATE TABLE t1 (id INT);
+
+INSERT INTO t1 VALUES (1), (2), (3);
+INSERT INTO t1 VALUES (4), (5), (6);
+
+
+--let $binlog = query_get_value(SHOW MASTER STATUS, File, 1)
+
+FLUSH BINARY LOGS;
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_regex /\d{6} *\d*:\d\d:\d\d/<date>/ /Start:.*at startup/Start: xxx/ /SET TIMESTAMP=\d*/SET TIMESTAMP=X/ /exec_time=\d*/exec_time=x/ /mapped to number \d*/mapped to number num/ /CRC32 0x[0-9a-f]+/CRC32 XXX/ /@@session.sql_mode=\d+/@@session.sql_mode=#/ /collation_server=\d+/collation_server=#/ /xid=\d*/xid=<xid>/
+--exec $MYSQL_BINLOG --verbose --verbose --base64-output=DECODE-ROWS --catalog=cat1 --short-form $MARIADB_TOPDIR/$binlog > $MYSQLTEST_VARDIR/tmp/mysqlbinlog.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.sql
+
+--error 7
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_regex /\d{6} *\d*:\d\d:\d\d/<date>/ /Start:.*at startup/Start: xxx/ /SET TIMESTAMP=\d*/SET TIMESTAMP=X/ /exec_time=\d*/exec_time=x/ /mapped to number \d*/mapped to number num/ /CRC32 0x[0-9a-f]+/CRC32 XXX/ /@@session.sql_mode=\d+/@@session.sql_mode=#/ /collation_server=\d+/collation_server=#/ /xid=\d*/xid=<xid>/
+--exec $MYSQL_BINLOG --verbose --verbose --base64-output=DECODE-ROWS --catalogd=cat1 --short-form $MARIADB_TOPDIR/$binlog > $MYSQLTEST_VARDIR/tmp/mysqlbinlog.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog.sql
+
+DROP TABLE t1;
+
+connect(con1,localhost,root,,def.test);
+
+DROP CATALOG cat1;
+DROP CATALOG cat2;

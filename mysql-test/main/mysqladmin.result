@@ -26,3 +26,7 @@ Result
 OK
 # Cleanup
 # restart
+#
+# MDEV-31705: Upgrade MariaDB clients with --catalog
+#
+mysqld is alive

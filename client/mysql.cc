@@ -1505,9 +1505,6 @@ static bool do_connect(MYSQL *mysql, const char *host, const char *user,
                        const char *password, const char *catalog,
                        const char *database, ulong flags)
 {
-#ifndef MARIADB_DEFAULT_CATALOG
-  char catalog_db[SAFE_NAME_LEN*2+3];
-#endif
 
   if (opt_secure_auth)
     mysql_options(mysql, MYSQL_SECURE_AUTH, (char *) &opt_secure_auth);

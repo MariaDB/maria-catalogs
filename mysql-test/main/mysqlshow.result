@@ -76,3 +76,11 @@ Database: test
 
 DROP TABLE t1, t2;
 End of 5.0 tests
+#
+# MDEV-31705: Upgrade MariaDB clients with --catalog
+#
+Database: test
++--------+
+| Tables |
++--------+
++--------+

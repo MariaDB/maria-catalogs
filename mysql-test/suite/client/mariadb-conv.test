@@ -37,3 +37,9 @@
 --error 1
 --exec $MARIADB_CONV -f utf8 -t latin1    < $MYSQL_TEST_DIR/std_data/mariadb-conv/file02.latin1.txt 2>&1
 --exec $MARIADB_CONV -f utf8 -t latin1 -c < $MYSQL_TEST_DIR/std_data/mariadb-conv/file02.latin1.txt 2>&1
+
+--echo #
+--echo # MDEV-31705: Upgrade MariaDB clients with --catalog
+--echo #
+
+--exec echo "t1" | $MARIADB_CONV --catalog=def

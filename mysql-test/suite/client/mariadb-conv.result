@@ -23,3 +23,7 @@ Illegal utf8mb3 byte sequence at position 7
 aaa
 xxx???xxx
 bbb
+#
+# MDEV-31705: Upgrade MariaDB clients with --catalog
+#
+t1

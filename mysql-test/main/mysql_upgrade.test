@@ -534,3 +534,10 @@ call mtr.add_suppression("Column count of mysql.proc is wrong. Expected 21, foun
 
 --let $old_version= 10.4
 --source include/load_dump_and_upgrade.inc
+
+
+--echo #
+--echo # MDEV-31705: Upgrade MariaDB clients with --catalog
+--echo #
+
+--exec $MYSQL_UPGRADE --force --catalog=def 2>&1

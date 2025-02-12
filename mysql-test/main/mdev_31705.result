@@ -1,0 +1,51 @@
+CREATE CATALOG cat1;
+CREATE CATALOG cat2;
+USE CATALOG cat1;
+CREATE USER cat1_root@localhost;
+GRANT ALL PRIVILEGES on *.* to cat1_root@localhost;
+CREATE DATABASE test;
+connect con1,localhost,cat1_root,,cat1.test;
+SELECT CURRENT_USER();
+CURRENT_USER()
+cat1_root@localhost
+mysqld is alive
+mariadb-admin: connect to server at 'localhost' failed
+error: 'Access denied for user 'cat1_root'@'localhost' (using password: NO)'
+mariadb-admin: unknown variable 'catalogd=cat2'
+select 1;
+select 1;
+select 1;
+select 1;
+select 1;
+select 1;
+Database: test
++--------+
+| Tables |
++--------+
++--------+
+CREATE TABLE t1 (a INT);
+INSERT IGNORE INTO t1 VALUES (1);
+test.t1: Records: 2  Deleted: 0  Skipped: 0  Warnings: 2
+DROP TABLE t1;
+CREATE TABLE t1(a int);
+test.t1                                            OK
+DROP TABLE t1;
+CREATE TABLE t1(a int);
+DROP TABLE t1;
+CREATE TABLE t1(a int);
+DROP TABLE t1;
+t1
+connection default;
+disconnect con1;
+SELECT CURRENT_USER();
+CURRENT_USER()
+root@localhost
+USE test;
+CREATE TABLE t1 (id INT);
+INSERT INTO t1 VALUES (1), (2), (3);
+INSERT INTO t1 VALUES (4), (5), (6);
+FLUSH BINARY LOGS;
+DROP TABLE t1;
+connect con1,localhost,root,,def.test;
+DROP CATALOG cat1;
+DROP CATALOG cat2;

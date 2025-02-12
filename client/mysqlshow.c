@@ -37,7 +37,7 @@ static my_bool debug_info_flag= 0, debug_check_flag= 0;
 static uint my_end_arg= 0;
 static uint opt_verbose=0;
 static char *default_charset= (char*) MYSQL_AUTODETECT_CHARSET_NAME;
-static char *opt_plugin_dir= 0, *opt_default_auth= 0;
+static char *opt_plugin_dir= 0, *opt_default_auth= 0, *current_catalog= 0, *curr_database= 0;
 
 static uint opt_protocol=0;
 
@@ -149,7 +149,15 @@ int main(int argc, char **argv)
   mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
   mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqlshow");
-  if (!(mysql_real_connect(&mysql,host,user,opt_password,
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(&mysql, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
+
+   if (!(mysql_real_connect(&mysql,host,user,opt_password,
 			   (first_argument_uses_wildcards) ? "" :
                            argv[0],opt_mysql_port,opt_mysql_unix_port,
 			   0)))
@@ -262,7 +270,9 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 

@@ -46,7 +46,7 @@ static my_bool debug_info_flag, debug_check_flag,
 static my_bool opt_not_used, opt_silent, opt_check_upgrade;
 static uint opt_force, opt_verbose;
 static uint my_end_arg= 0;
-static char *opt_user= (char*)"root";
+static char *opt_user= (char*)"root", *current_catalog= 0;
 
 static my_bool upgrade_from_mysql;
 
@@ -174,7 +174,9 @@ static struct my_option my_long_options[]=
    "issued by mysqlcheck are written to the binary log.",
    &opt_write_binlog, &opt_write_binlog, 0, GET_BOOL, NO_ARG,
    0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 
@@ -389,6 +391,7 @@ get_one_option(const struct my_option *opt, const char *argument,
   case OPT_MYSQL_PROTOCOL: /* --protocol */
   case OPT_PLUGIN_DIR:                          /* --plugin-dir */
   case OPT_DEFAULT_AUTH:                        /* --default-auth */
+  case OPT_CONNECT_CATALOG:
     add_one_option_cmd_line(&conn_args, opt->name, argument);
     break;
   }

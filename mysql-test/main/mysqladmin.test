@@ -96,3 +96,8 @@ remove_file $ssl_key;
 # restart with usual SSL
 let $restart_parameters=;
 --source include/restart_mysqld.inc
+
+--echo #
+--echo # MDEV-31705: Upgrade MariaDB clients with --catalog
+--echo #
+--exec $MYSQLADMIN --default-character-set=latin1 --catalog=def -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u root --password= ping 2>&1

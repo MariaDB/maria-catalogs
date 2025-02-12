@@ -421,3 +421,11 @@ select db_name,table_name,column_name,min_value,max_value,nulls_ratio,avg_length
 --exec $MYSQL_CHECK --analyze test t1 --persistent
 select db_name,table_name,column_name,min_value,max_value,nulls_ratio,avg_length,avg_frequency from mysql.column_stats where db_name = 'test' and table_name = 't1' order by db_name,table_name;
 drop table t1;
+
+--echo #
+--echo # MDEV-31705: Upgrade MariaDB clients with --catalog
+--echo #
+create table t1(a int);
+--replace_result 'Table is already up to date' OK
+--exec $MYSQL_CHECK --catalog=def --databases test
+drop table t1;
