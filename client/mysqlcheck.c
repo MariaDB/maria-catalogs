@@ -47,7 +47,7 @@ static my_bool opt_alldbs = 0, opt_check_only_changed = 0, opt_extended = 0,
 static my_bool opt_write_binlog= 1, opt_flush_tables= 0;
 static uint verbose = 0, opt_mysql_port=0;
 static int my_end_arg;
-static char * opt_mysql_unix_port = 0;
+static char * opt_mysql_unix_port = 0, *current_catalog= 0, *current_database= 0;
 static char *opt_password = 0, *current_user = 0, 
 	    *default_charset= 0, *current_host= 0;
 static char *opt_plugin_dir= 0, *opt_default_auth= 0;
@@ -218,6 +218,8 @@ static struct my_option my_long_options[] =
    &do_views_typelib, GET_ENUM, OPT_ARG, 0, 0, 0, 0, 0, 0},
   {"process-tables", 0, "Perform the requested operation on tables.",
    &opt_do_tables, &opt_do_tables, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -1137,8 +1139,15 @@ static int dbConnect(char *host, char *user, char *passwd)
   mysql_options(&mysql_connection, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
   mysql_options4(&mysql_connection, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqlcheck");
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(&mysql_connection, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
   if (!(sock = mysql_real_connect(&mysql_connection, host, user, passwd,
-         NULL, opt_mysql_port, opt_mysql_unix_port, 0)))
+    NULL, opt_mysql_port, opt_mysql_unix_port, 0)))
   {
     DBerror(&mysql_connection, "when trying to connect");
     DBUG_RETURN(1);

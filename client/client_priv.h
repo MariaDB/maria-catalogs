@@ -115,6 +115,13 @@ enum options_client
   OPT_MAX_CLIENT_OPTION /* should be always the last */
 };
 
+
+#define MARIADB_DEFAULT_CATALOG "def"
+
+#ifndef MARIADB_DEFAULT_CATALOG
+  char catalog_db[SAFE_NAME_LEN*2+3];
+#endif
+
 /**
   First mysql version supporting the information schema.
 */

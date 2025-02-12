@@ -22,6 +22,7 @@
 #include <my_getopt.h>
 #include <my_dir.h>
 #include <mysql_version.h>
+#include <client_priv.h>
 #include <welcome_copyright_notice.h>
 
 /* Global variables. */
@@ -31,7 +32,8 @@ static uint opt_no_defaults= 0;
 static uint opt_print_defaults= 0;
 static char *opt_datadir=0, *opt_basedir=0,
             *opt_plugin_dir=0, *opt_plugin_ini=0,
-            *opt_mysqld=0, *opt_my_print_defaults=0, *opt_lc_messages_dir;
+            *opt_mysqld=0, *opt_my_print_defaults=0, *opt_lc_messages_dir,
+            *current_catalog= 0;
 static char bootstrap[FN_REFLEN];
 
 
@@ -75,7 +77,9 @@ static struct my_option my_long_options[] =
     0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit.", 0, 0, 0, GET_NO_ARG,
     NO_ARG, 0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+  {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 

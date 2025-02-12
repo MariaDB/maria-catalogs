@@ -162,7 +162,7 @@ static unsigned int auto_generate_sql_secondary_indexes;
 static ulonglong num_of_query;
 static ulonglong auto_generate_sql_number;
 const char *concurrency_str= NULL;
-static char *create_string;
+static char *create_string, *current_catalog= 0, *current_database;
 uint *concurrency;
 static char mysql_charsets_dir[FN_REFLEN+1];
 
@@ -358,6 +358,14 @@ int main(int argc, char **argv)
   mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
   mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqlslap");
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(&mysql, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
+
   if (!opt_only_print) 
   {
     if (!(mysql_real_connect(&mysql, host, user, opt_password,
@@ -707,7 +715,9 @@ static struct my_option my_long_options[] =
    0, 0, 0, 0, 0, 0},
   {"version", 'V', "Output version information and exit.", 0, 0, 0,
    GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 

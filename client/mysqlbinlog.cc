@@ -96,7 +96,7 @@ ulonglong test_flags = 0;
 ulong opt_binlog_rows_event_max_encoded_size= MAX_MAX_ALLOWED_PACKET;
 static uint opt_protocol= 0;
 static FILE *result_file;
-static char *result_file_name= 0;
+static char *result_file_name= 0, *current_catalog= 0, *current_database;
 static const char *output_prefix= "";
 static char **defaults_argv= 0;
 static MEM_ROOT glob_root;
@@ -1694,6 +1694,8 @@ Example: rewrite-db='from->to'.",
    "Print metadata stored in Table_map_log_event",
    &opt_print_table_metadata, &opt_print_table_metadata, 0,
    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -2368,6 +2370,14 @@ static Exit_status safe_connect()
   mysql_options(mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
   mysql_options4(mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqlbinlog");
+
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(mysql, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
   if (!mysql_real_connect(mysql, host, user, pass, 0, port, sock, 0))
   {
     error("Failed on connect: %s", mysql_error(mysql));

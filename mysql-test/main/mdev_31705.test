@@ -1,0 +1,89 @@
+--source include/have_catalogs.inc
+
+--echo # Using def catalog
+
+USE test;
+
+CREATE TABLE t1 (a INT);
+INSERT IGNORE INTO t1 VALUES (1);
+
+ --exec $MYSQL_DUMP --catalog=def test > $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+ --remove_file $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+
+ --exec echo "1\tvalue1\n2\tvalue2" > $MYSQLTEST_VARDIR/tmp/t1.txt
+ --exec $MYSQL_IMPORT --catalog=def test $MYSQLTEST_VARDIR/tmp/t1.txt
+
+ --remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+ --replace_result 'Table is already up to date' OK
+ --exec $MYSQL_CHECK --catalog=def --databases test
+
+DROP TABLE t1;
+
+--exec $MYSQLADMIN --default-character-set=latin1 --catalog=def -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u root --password= ping 2>&1
+
+--exec $MYSQL_UPGRADE --force --catalog=def 2>&1
+
+--exec $MYSQL_SHOW --catalog=def test
+
+--exec $MYSQL_SLAP --catalog=def --only-print --iterations=3  --query="select 1" --delimiter=";"
+
+--exec echo "t1" | $MARIADB_CONV --catalog=def
+
+
+--echo # Creating a new user and catalog
+
+CREATE CATALOG cat1;
+USE CATALOG cat1;
+
+CREATE USER cat1_root@localhost;
+GRANT ALL PRIVILEGES on *.* to cat1_root@localhost;
+
+CREATE DATABASE test1;
+USE test1;
+
+connect(con1,localhost,cat1_root,,cat1.test1);
+
+SELECT CURRENT_USER();
+
+--exec $MYSQLADMIN --default-character-set=latin1 --catalog=cat1 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= ping 2>&1
+
+--exec $MYSQL_SLAP -S $MASTER_MYSOCK -P $MASTER_MYPORT --catalog=cat1 --only-print --iterations=3  --query="select 1" --delimiter=";" -u cat1_root --password=
+
+--exec $MYSQL_SHOW --catalog=cat1 test1 -u cat1_root --password=
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error 1
+--exec $MYSQL_SHOW --catalog=def test1 -u cat1_root --password=
+
+
+CREATE TABLE t1 (a INT);
+INSERT IGNORE INTO t1 VALUES (1);
+
+--exec $MYSQL_DUMP -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=cat1 test1 > $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--error 2
+--exec $MYSQL_DUMP -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=def test1 > $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/dumptest1.sql
+
+--exec echo "1\tvalue1\n2\tvalue2" > $MYSQLTEST_VARDIR/tmp/t1.txt
+--exec $MYSQL_IMPORT -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=cat1 test1 $MYSQLTEST_VARDIR/tmp/t1.txt
+--error 1
+--exec $MYSQL_IMPORT -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --password= --catalog=def test1 $MYSQLTEST_VARDIR/tmp/t1.txt
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.txt
+
+DROP TABLE t1;
+
+CREATE TABLE t1(a int);
+--replace_result 'Table is already up to date' OK
+--exec $MYSQL_CHECK --catalog=cat1 -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --databases test1
+--error 2
+--exec $MYSQL_CHECK --catalog=def -S $MASTER_MYSOCK -P $MASTER_MYPORT  -u cat1_root --databases test1
+DROP TABLE t1;
+
+--exec $MYSQL_UPGRADE --catalog=cat1 test1 -u cat1_root --password=
+--error 1
+--exec $MYSQL_UPGRADE --catalog=def test1 -u cat1_root --password=
+
+remove_file $MARIADB_TOPDIR/mariadb_upgrade_info;
+
+connection default;
+DROP DATABASE test1;

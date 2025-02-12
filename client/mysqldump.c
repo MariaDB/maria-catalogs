@@ -157,7 +157,8 @@ static char  *opt_password=0,*current_user=0,
              *lines_terminated=0, *enclosed=0, *opt_enclosed=0, *escaped=0,
              *where=0, *order_by=0,
              *err_ptr= 0,
-             *log_error_file= NULL, *opt_asof_timestamp= NULL;
+             *log_error_file= NULL, *opt_asof_timestamp= NULL,
+             *current_catalog= 0, *current_database= 0;
 static const char *opt_compatible_mode_str= 0;
 static char **defaults_argv= 0;
 static char compatible_mode_normal_str[255];
@@ -616,7 +617,9 @@ static struct my_option my_long_options[] =
    "Default authentication client-side plugin to use.",
    &opt_default_auth, &opt_default_auth, 0,
    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+   {"catalog", OPT_CONNECT_CATALOG, "Catalog to use.", &current_catalog,
+   &current_catalog, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
 };
 
 static const char *load_default_groups[]=
@@ -1994,6 +1997,15 @@ static int connect_to_db(char *host, char *user,char *passwd)
   mysql_options4(&mysql_connection, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqldump");
   mysql= &mysql_connection;          /* So we can mysql_close() it properly */
+
+
+  if (current_catalog)
+  {
+#ifdef MARIADB_DEFAULT_CATALOG
+    /* using new MariaDB client protocol for catalogs */
+    mysql_optionsv(mysql, MARIADB_OPT_CATALOG, current_catalog);
+#endif
+  }
   if (!mysql_real_connect(&mysql_connection,host,user,passwd,
                           NULL,opt_mysql_port,opt_mysql_unix_port, 0))
   {
