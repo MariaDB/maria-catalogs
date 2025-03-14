@@ -38,6 +38,11 @@ SET(MY_WARNING_FLAGS
   -Wnon-virtual-dtor
   -Wvla
   -Wwrite-strings
+  -Wno-calloc-transposed-args
+  -Wno-enum-int-mismatch
+  -Wno-template-id-cdtor
+  -Wno-address
+  -Wno-dangling-reference
   )
 
 FOREACH(F ${MY_WARNING_FLAGS})
