@@ -27,17 +27,18 @@ then
   sed '/Add support for verbose builds/,/^$/d' -i debian/rules
 elif [ -d storage/columnstore/columnstore/debian ]
 then
+  echo 'Pass'
   # ColumnStore is explicitly disabled in the native Debian build. Enable it
   # now when build is triggered by autobake-deb.sh (MariaDB.org) and when the
   # build is not running on Gitlab-CI.
-  sed '/-DPLUGIN_COLUMNSTORE=NO/d' -i debian/rules
+  # sed '/-DPLUGIN_COLUMNSTORE=NO/d' -i debian/rules
   # Take the files and part of control from MCS directory
-  if [ ! -f debian/mariadb-plugin-columnstore.install ]
-  then
-    cp -v storage/columnstore/columnstore/debian/mariadb-plugin-columnstore.* debian/
-    echo >> debian/control
-    sed "s/-10.6//" <storage/columnstore/columnstore/debian/control >> debian/control
-  fi
+  # if [ ! -f debian/mariadb-plugin-columnstore.install ]
+  # then
+  #   cp -v storage/columnstore/columnstore/debian/mariadb-plugin-columnstore.* debian/
+  #   echo >> debian/control
+  #   sed "s/-10.6//" <storage/columnstore/columnstore/debian/control >> debian/control
+  # fi
 fi
 
 # Look up distro-version specific stuff
