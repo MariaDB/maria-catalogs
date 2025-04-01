@@ -169,6 +169,15 @@ in
     then
       replace_uring_with_aio
     fi
+    ;&
+  "noble"|"oracular")
+    # mariadb-plugin-rocksdb s390x not supported by us (yet)
+    # ubuntu doesn't support mips64el yet, so keep this just
+    # in case something changes.
+    if [[ ! "$architecture" =~ amd64|arm64|ppc64el|s390x ]]
+    then
+      remove_rocksdb_tools
+    fi
     ;;
   *)
     echo "Error: Unknown release '$LSBNAME'" >&2
