@@ -356,7 +356,7 @@ then
 elif test -n "$basedir"
 then
   print_defaults=`find_in_dirs my_print_defaults $basedir/bin $basedir/extra`
-  if test $? == 1 ; then exit 1 ; fi
+  if [ $? -eq 1 ]; then exit 1 ; fi
 elif test -n "$dirname0" -a -x "$dirname0/@bindir@/my_print_defaults"
 then
   print_defaults="$dirname0/@bindir@/my_print_defaults"
@@ -400,16 +400,16 @@ elif test -n "$basedir"
 then
   bindir="$basedir/bin" # only used in the help text
   resolveip=`find_in_dirs resolveip @resolveip_locations@ $basedir/extra`
-  if test $? == 1 ; then exit 1 ; fi
+  if [ $? -eq 1 ]; then exit 1 ; fi
   mysqld=`find_in_dirs mariadbd @mysqld_locations@ $basedir/sql`
-  if test $? == 1 ; then exit 1 ; fi
+  if [ $? -eq 1 ]; then exit 1 ; fi
   langdir=`find_in_dirs --dir errmsg.sys @errmsg_locations@ $basedir/sql/share/english`
-  if test $? == 1 ; then exit 1 ; fi
+  if [ $? -eq 1 ]; then exit 1 ; fi
   srcpkgdatadir=`find_in_dirs --dir fill_help_tables.sql @pkgdata_locations@ $basedir/scripts`
-  if test $? == 1 ; then exit 1 ; fi
+  if [ $? -eq 1 ]; then exit 1 ; fi
   buildpkgdatadir=$srcpkgdatadir
   mariadb_client=`find_in_dirs mariadb $bindir $basedir/client`
-  if test $? == 1 ; then exit 1 ; fi
+  if [ $? -eq 1 ]; then exit 1 ; fi
   plugindir=`find_in_dirs --dir --silent auth_pam.so $basedir/lib*/plugin $basedir/lib*/mysql/plugin $basedir/lib/*/mariadb19/plugin`
   pamtooldir=$plugindir
 # relative from where the script was run for a relocatable install
