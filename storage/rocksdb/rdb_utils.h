@@ -306,7 +306,7 @@ std::string rdb_hexdump(const char *data, const std::size_t data_len,
 /*
   Helper function to see if a database exists
  */
-bool rdb_database_exists(const std::string &db_name);
+bool rdb_database_exists(const std::string &cat_name, const std::string &db_name);
 
 const char *get_rocksdb_supported_compression_types();
 

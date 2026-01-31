@@ -7,10 +7,11 @@ INSERT INTO t values (1), (2), (3);
 --error ER_TABLE_EXISTS_ERROR 
 CREATE TABLE t(id int primary key) engine=rocksdb;
 FLUSH TABLES;
-move_file $MYSQLTEST_VARDIR/mysqld.1/data/test/t.frm $MYSQLTEST_VARDIR/mysqld.1/data/test/t.frm.tmp;
+move_file $MARIADB_DATADIR/test/t.frm $MARIADB_DATADIR/test/t.frm.tmp;
+--replace_regex /Table '.*' does/Table 'test.t' does/ /if '.*' exists/if '.\/test\/t.frm' exists/
 --error ER_METADATA_INCONSISTENCY
 CREATE TABLE t(id int primary key) engine=rocksdb;
-move_file $MYSQLTEST_VARDIR/mysqld.1/data/test/t.frm.tmp $MYSQLTEST_VARDIR/mysqld.1/data/test/t.frm;
+move_file $MARIADB_DATADIR/test/t.frm.tmp $MARIADB_DATADIR/test/t.frm;
 FLUSH TABLES;
 SELECT * FROM t;
 DROP TABLE t;

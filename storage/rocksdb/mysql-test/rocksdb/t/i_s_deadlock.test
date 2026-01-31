@@ -33,12 +33,14 @@ echo Deadlock #1;
 --source include/simple_deadlock.inc
 connection default;
 --replace_column 1 DEADLOCK_ID 2 TIMESTAMP 3 TRANSACTION_ID 5 WAITING_KEY
+--replace_regex /.*test/test/
 select * from information_schema.rocksdb_deadlock;
 
 echo Deadlock #2;
 --source include/simple_deadlock.inc
 connection default;
 --replace_column 1 DEADLOCK_ID 2 TIMESTAMP 3 TRANSACTION_ID 5 WAITING_KEY
+--replace_regex /.*test/test/
 select * from information_schema.rocksdb_deadlock;
 set global rocksdb_max_latest_deadlocks = 10;
 
@@ -46,9 +48,11 @@ echo Deadlock #3;
 --source include/simple_deadlock.inc
 connection default;
 --replace_column 1 DEADLOCK_ID 2 TIMESTAMP 3 TRANSACTION_ID 5 WAITING_KEY
+--replace_regex /.*test/test/
 select * from information_schema.rocksdb_deadlock;
 set global rocksdb_max_latest_deadlocks = 1;
 --replace_column 1 DEADLOCK_ID 2 TIMESTAMP 3 TRANSACTION_ID 5 WAITING_KEY
+--replace_regex /.*test/test/
 select * from information_schema.rocksdb_deadlock;
 
 connection con3;
@@ -139,6 +143,7 @@ rollback;
 
 connection default;
 --replace_column 1 DEADLOCK_ID 2 TIMESTAMP 3 TRANSACTION_ID 5 WAITING_KEY
+--replace_regex /.*test/test/
 select * from information_schema.rocksdb_deadlock;
 
 disconnect con1;

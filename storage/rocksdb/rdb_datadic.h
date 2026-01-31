@@ -1083,7 +1083,8 @@ class Rdb_tbl_def {
   /* Stores 'dbname.tablename' */
   std::string m_dbname_tablename;
 
-  /* Store the db name, table name, and partition name */
+  /* Store the catalog name, db name, table name, and partition name */
+  std::string m_catname;
   std::string m_dbname;
   std::string m_tablename;
   std::string m_partition;
@@ -1135,6 +1136,7 @@ class Rdb_tbl_def {
                 const rocksdb::Slice &key);
 
   const std::string &full_tablename() const { return m_dbname_tablename; }
+  const std::string &base_catname() const { return m_catname; }
   const std::string &base_dbname() const { return m_dbname; }
   const std::string &base_tablename() const { return m_tablename; }
   const std::string &base_partition() const { return m_partition; }

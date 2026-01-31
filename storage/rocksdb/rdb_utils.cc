@@ -267,9 +267,15 @@ std::string rdb_hexdump(const char *data, const std::size_t data_len,
 /*
   Attempt to access the database subdirectory to see if it exists
 */
-bool rdb_database_exists(const std::string &db_name) {
-  const std::string dir =
-      std::string(mysql_real_data_home) + FN_DIRSEP + db_name;
+bool rdb_database_exists(const std::string &cat_name,
+                         const std::string &db_name) {
+  std::string dir;
+  if (using_catalogs) {
+    dir = std::string(mysql_real_data_home) + FN_DIRSEP + cat_name + FN_DIRSEP
+          + db_name;
+  } else {
+    dir = std::string(mysql_real_data_home) + FN_DIRSEP + db_name;
+  }
   struct st_my_dir *const dir_info =
       my_dir(dir.c_str(), MYF(MY_DONT_SORT | MY_WANT_STAT));
   if (dir_info == nullptr) {
